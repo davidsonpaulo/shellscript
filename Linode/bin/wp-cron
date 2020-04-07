@@ -1,0 +1,28 @@
+#!/bin/bash
+
+ConfigDir="/etc/wordpress"
+Websites="${ConfigDir}/websites"
+Process="$(basename $0)"
+
+if [ "$USER" != "www-data" ] ; then
+    sudo -u www-data $0
+    exit $?
+fi
+
+if which wp > /dev/null 2>&1  ; then
+    if [ -f "$Websites" ] ; then
+        while read Domain ; do
+            Dir="/var/www/${Domain}/public_html"
+
+            if [ -d "${Dir}/wp-content" ] ; then
+                cd "$Dir"
+                wp cron event run --due-now 2>&1 | logger -t "${Process}/${Domain}"
+            fi
+        done < "$Websites"
+    fi
+else
+    echo "Error: 'wp' not found"
+    exit 1
+fi 2>&1 | logger -t "$Process"
+
+exit 0

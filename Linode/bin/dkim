@@ -1,0 +1,334 @@
+#!/bin/bash
+
+MYSQL_DATABASE="opendkim"
+OPENDKIM_DIR="/etc/opendkim"
+
+Mysql="/usr/bin/mysql $MYSQL_DATABASE"
+
+getDomainID() {
+    $Mysql -B -e "SELECT domain_id FROM domains WHERE domain = '${1}';" |
+    sed -n 2p
+}
+
+getKeyID() {
+    $Mysql -B -e "SELECT k.id FROM dkim_keys AS k, domains AS d WHERE k.key_name = '${1}' AND d.domain_id = k.domain_id AND d.domain = '${2}';" |
+    sed -n 2p
+}
+
+getSigning() {
+    $Mysql -B -e "SELECT d.domain, k.key_name FROM domains AS d, dkim_keys AS k, signing AS s WHERE d.domain = '${1}' AND d.domain_id = s.domain_id AND k.id = s.key_id;"
+}
+
+listDomains() {
+    $Mysql -B -e "SELECT domain_id, domain FROM domains"
+}
+
+listKeys() {
+    $Mysql -B -e "SELECT k.id, k.key_name, d.domain FROM dkim_keys AS k, domains AS d WHERE d.domain_id = k.domain_id"
+}
+
+listSignings() {
+    $Mysql -B -e "SELECT d.domain, k.key_name FROM domains AS d, dkim_keys AS k, signing AS s WHERE d.domain_id = s.domain_id AND k.id = s.key_id;" |
+    sed 1d
+}
+
+getLinodeDomainID() {
+    linode-cli domains list --domain $1 --pretty --json | 
+    fgrep '"id":' | 
+    sed -r 's/[^0-9]//g'
+}
+
+getDNS() {
+    LinodeDomainID="$(getLinodeDomainID $1)"
+
+    if [ -n "$LinodeDomainID" ] ; then
+        linode-cli --json --pretty domains records-list $LinodeDomainID |
+        grep '"name": "'$2'._domainkey"' -A 2 | 
+        tail -n 1 | 
+        awk -F ": " '{ print $2 }' |
+        sed -r -e 's/,[[:space:]]*$//' -e 's/^"(.*)"$/\1/'
+    fi
+}
+
+getDNSID() {
+    LinodeDomainID="$(getLinodeDomainID $1)"
+
+    if [ -n "$LinodeDomainID" ] ; then
+        linode-cli --json --pretty domains records-list $LinodeDomainID |
+        grep '"name": "'$2'._domainkey"' -B 1 |
+        head -n 1 |
+        sed -r 's/[^0-9]//g'
+    fi
+}
+
+getDNSEntry() {
+    EntryFile="${OPENDKIM_DIR}/${1}/${2}.txt"
+
+    sed -r -e 's/^.*\( "//' -e 's/ "$//' -e 's/^[[:space:]]+"//' -e 's/" \).+$//' -e 's/rsa-sha256/sha256/' $EntryFile |
+        tr '\n' ' ' | sed 's/ $//' ; echo
+}
+
+addDomain() {
+    $Mysql -e "INSERT INTO domains ( domain ) VALUES ('${1}');"
+    echo "Domain '$1' added to the database."
+}
+
+addKey() {
+    DomainID="$(getDomainID "$2")"
+
+    if [ -n "$DomainID" ] ; then
+        KeyName="$1"
+        $Mysql -e "INSERT INTO dkim_keys ( domain_id, key_name ) VALUES ( $DomainID, '$KeyName' );"
+        echo "Key '$KeyName' added for domain '$2' in the database."
+    else
+        echo "[ ERROR ] Domain '$1' does not exist."
+        return 1
+    fi
+}
+
+deleteDNS() {
+    Domain="$1"
+    Key="$2"
+    DNS="$(getDNS "$Domain" "$Key")"
+
+    if [ -n "$DNS" ] ; then
+        LinodeDomainID="$(getLinodeDomainID $Domain)"
+        DNSID="$(getDNSID "$Domain" "$Key")"
+        linode-cli --json --pretty domains records-delete $LinodeDomainID $DNSID &&
+            echo "DNS entry for key '$2' deleted on domain '$1'."
+    else
+        echo "[ ERROR ] There is not DNS entry for key '$2' on domain '$1'."
+        return 1
+    fi
+}
+
+addDNS() {
+    Domain="$1"
+    Key="$2"
+    DNS="$(getDNS "$Domain" "$Key")"
+    DNSEntry="$(getDNSEntry "$Domain" "$Key")"
+
+    if [ "$DNS" == "$DNSEntry" ] ; then
+        echo "[ ERROR ] DNS entry is already enabled for domain '$Domain' using key '${Key}'."
+        return 1
+    elif [ -n "$DNSEntry" ] ; then
+        LinodeDomainID="$(getLinodeDomainID $Domain)"
+
+        if [ -n "$LinodeDomainID" ] ; then
+            linode-cli --json --pretty domains records-create $LinodeDomainID \
+                --target "$DNSEntry" \
+                --name "${Key}._domainkey" \
+                --type "TXT"
+
+            if [ $? -eq 0 ] ; then
+                echo "DNS entry added for domain '$Domain' using key '$Key'."
+            else
+                echo "[ ERROR ] Failed creating DNS entry for domain '$Domain' using key '$Key'."
+                return 1
+            fi
+        else
+            echo "[ ERROR ] Couldn't find the Linode Domain ID for domain '$Domain'."
+            return 1
+        fi
+    else
+        echo "[ ERROR ] Couldn't get DNS entry for domain '$Domain' using key '$Key'."
+        return 1
+    fi
+}
+
+isThereSigningForDomain() {
+    $Mysql -B -e "SELECT s.key_id FROM signing AS s, domains AS d WHERE s.domain_id = d.domain_id AND d.domain = '$1'" |
+    sed 1d
+}
+
+setSigning() {
+    DomainID="$(getDomainID "$1")"
+
+    if [ -n "$DomainID" ] ; then
+        KeyID="$(getKeyID "$2" "$1")"
+
+        if [ -n "$KeyID" ] ; then
+            if [ -n "$(isThereSigningForDomain "$1")" ] ; then
+                $Mysql -e "UPDATE signing SET key_id = $KeyID WHERE domain_id = $DomainID;"
+            else
+                $Mysql -e "INSERT INTO signing ( domain_id, key_id ) VALUES ( $DomainID, $KeyID );"
+            fi
+
+            echo "Signing configured for domain '$1' using key '$2'."
+        else
+            echo "[ ERROR ] Key '$2' does not exist for domain '$1'."
+            return 1
+        fi
+    else
+        echo "[ ERROR ] Domain '$1' does not exist."
+        return 1
+    fi
+}
+
+deleteDomain() {
+    DomainID="$(getDomainID "$1")"
+
+    if [ -n "$DomainID" ] ; then
+        $Mysql -e "DELETE FROM domains WHERE domain_id = '${DomainID}';"
+        $Mysql -e "DELETE FROM dkim_keys WHERE domain_id = '${DomainID}';"
+        $Mysql -e "DELETE FROM signing WHERE domain_id = '${DomainID}';"
+        echo "Domain '$1' deleted."
+    else
+        echo "[ ERROR ] Domain '$1' does not exist."
+        return 1
+    fi
+}
+
+deleteKey() {
+    KeyName="$1"
+    Domain="$2"
+    KeyID="$(getKeyID "$1" "$2")"
+    KeyFile="${OPENDKIM_DIR}/${Domain}/${KeyName}.private"
+    KeyTXT="${OPENDKIM_DIR}/${Domain}/${KeyName}.txt"
+    Found=0
+
+    if [ -n "$KeyID" ] ; then
+        Found=1
+        $Mysql -e "DELETE FROM dkim_keys WHERE id = '${KeyID}';"
+        $Mysql -e "DELETE FROM signing WHERE key_id = '${KeyID}';"
+        echo "Key '$1' for domain '$2' deleted from the database."
+    fi
+
+    if [ -f "$KeyFile" ] ; then
+        Found=1
+        rm -f "$KeyFile" "$KeyTXT"
+        echo "Key '$1' for domain '$2' deleted from the filesystem."
+    fi
+
+    if [ $Found -eq 0 ] ; then
+        echo "[ ERROR ] Key '$1' does not exist for domain '$2'."
+        return 1
+    fi
+}
+
+deleteSigning() {
+    DomainID="$(getDomainID "$1")"
+
+    if [ -n "$DomainID" ] ; then
+        Key="$(getSigning "$1" | sed 1d | awk '{ print $2 }')"
+
+        if [ -n "$Key" ] ; then
+            $Mysql -e "DELETE FROM signing WHERE domain_id = '${DomainID}';"
+            echo "Signing for domain '$1' (key: ${Key}) was deleted."
+        else
+            echo "[ ERROR ] No signing configured for domain '$1'."
+            return 1
+        fi
+    else
+        echo "[ ERROR ] Domain '$1' does not exist."
+        return 1
+    fi
+}
+
+generateKey() {
+    KeyName="$(date +"%Y%m")"
+    Domain="$1"
+    DomainDir="${OPENDKIM_DIR}/${Domain}"
+    KeyFile="${DomainDir}/${KeyName}.private"
+
+    if [ ! -d "$DomainDir" ] ; then
+        if ! install -vdm 0700 -o opendkim -g opendkim "$DomainDir" ; then
+            echo "[ ERROR ] Couldn't create directory '$DomainDir'."
+            return 1
+        fi
+    fi
+
+    if [ -f "$KeyFile" ] ; then
+        echo "[ WARNING ] Key file '$KeyFile' already exists."
+    else
+        cd "$DomainDir"
+
+        if ! opendkim-genkey -b 1024 -h rsa-sha256 -r -s $KeyName -d $Domain ; then
+            echo "[ ERROR ] Could not generate DKIM key '$KeyName' for domain '$Domain'."
+            return 1
+        else
+            chown opendkim:opendkim ${KeyName}.private
+        fi
+    fi
+
+    if [ -z "$(getDomainID "$Domain")" ] ; then
+        addDomain "$Domain"
+    fi
+
+    if [ -z "$(getKeyID "$KeyName" "$Domain")" ] ; then
+        addKey "$KeyName" "$Domain"
+    fi
+
+    if [ -z "$(getDNS "$Domain" "$KeyName")" ] ; then
+        addDNS "$Domain" "$KeyName"
+    fi
+}
+
+generateKeyTable() {
+    listSignings |
+    awk '{ print $2 "._domainkey." $1 " " $1 ":" $2 ":'$OPENDKIM_DIR'/" $1 "/" $2 ".private" }'
+}
+
+generateSigningTable() {
+    listSignings |
+    awk '{ print $1 " " $2 "._domainkey." $1 }'
+}
+
+updateDKIM() {
+    Reload=0
+    cd "$OPENDKIM_DIR"
+
+    NewKeyTable="$(generateKeyTable)"
+    KeyTable="$(cat key_table)"
+
+    if [ "$NewKeyTable" == "$KeyTable" ] ; then
+        echo "${OPENDKIM_DIR}/key_table is updated. Ignoring."
+    else
+        Reload=1
+        echo "Updating ${OPENDKIM_DIR}/key_table..."
+        echo "$NewKeyTable" > key_table
+    fi
+
+    NewSigningTable="$(generateSigningTable)"
+    SigningTable="$(cat signing_table)"
+
+    if [ "$NewSigningTable" == "$SigningTable" ] ; then
+        echo "${OPENDKIM_DIR}/signing_table is updated. Ignoring."
+    else
+        Reload=1
+        echo "Updating ${OPENDKIM_DIR}/signing_table..."
+        echo "$NewSigningTable" > signing_table
+    fi
+
+    if [ $Reload -eq 1 ] ; then
+        echo "Reloding service dkim..."
+        service opendkim reload
+        echo "[   OK   ] DKIM configuration has been updated."
+    else
+        echo "DKIM configuration hasn't been changed."
+    fi
+}
+
+
+ValidCommands="$(declare -F | awk '{ print $3 }')"
+
+usage() {
+    echo "Valid commands:"
+    sed 's/^/ - &/' <<< "$ValidCommands"
+}
+
+if [ $# -eq 0 ] ; then
+    usage
+    exit 1
+fi
+
+while read Command ; do
+    if [ "$1" == "$Command" ] ; then
+        Command="$1"
+        shift
+        $Command "$@"
+        exit $?
+    fi
+done <<< "$ValidCommands"
+
+usage

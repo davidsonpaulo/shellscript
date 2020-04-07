@@ -1,0 +1,16 @@
+#!/bin/bash
+
+if [ $EUID -ne 0 ] ; then
+    sudo $0
+    exit $?
+fi
+
+Whitelist="/etc/fail2ban/persistent.whitelist"
+Jail="/etc/fail2ban/jail.local"
+Line="ignoreip = $(tr '\n' ' ' < "$Whitelist" | sed -r 's/[[:space:]]+/ /g')"
+
+echo "Updating file $Jail"
+sed -ri "/^ignoreip/d ; /\[DEFAULT\]/a${Line}" /etc/fail2ban/jail.local
+echo "$Line"
+
+exit 0

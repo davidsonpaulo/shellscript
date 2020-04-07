@@ -1,0 +1,81 @@
+#!/bin/bash
+
+. /usr/local/lib/monitor-functions
+. /etc/monitoring/hostname
+
+LogFile="${LogDir}/services.log"
+LogContent="$(sed 1d "$LogFile")"
+MailSubject="Service was not running"
+NotRunning=()
+RestartVarnish=0
+Process="$(basename $0)"
+
+restartService() {
+    echo "Restarting service $1..." | tee -a "$LogFile"
+    service $1 restart
+
+    if ! service $1 status > /dev/null ; then
+        echo "Service $1 still not running!" | tee -a "$LogFile"
+        return 1
+    fi
+
+    return 0
+}
+
+checkService() {
+    if ! service $1 status > /dev/null ; then
+        echo "Service $1 is not running!" | tee -a "$LogFile"
+
+        if ! restartService $1 ; then
+            Failed=1
+            NotRunning+=( $1 )
+        else
+            if [ -n "$2" ] ; then
+                for Service in $(tr ',' ' ' <<< "$2") ; do
+                    restartService $Service
+                done
+            fi
+        fi
+    else
+        echo "Service $1 is running" | tee -a "$LogFile"
+    fi
+}
+
+checkServices() {
+    while read line ; do
+        Service="$(awk '{ print $1 }' <<< "$line")"
+        Restart="$(awk '{ print $2 }' <<< "$line")"
+
+        checkService $Service "$Restart" | logger -t "${Process}/${Service}"
+    done < "$Services"
+
+    if [ $RestartVarnish -eq 1 ] ; then
+        service varnish restart | logger -t "${Process}/varnish"
+    fi
+}
+
+if [ $EUID -ne 0 ] ; then
+    sudo -u root MAILRC="/etc/mail.rc" $0
+    exit 0
+fi
+
+date > "$LogFile"
+
+checkServices
+
+if [ "$LogContent" != "$(sed 1d "$LogFile")" ] ; then
+    if [ x"$1" != "xnomail" ] ; then
+        echo "FAILED: $Failed - Sending email..."
+        if [ $Failed -eq 1 ] ; then
+            Message="$(server-id ; echo ; echo)$(for ((i=0; i<${#NotRunning[@]}; i++)) ; do echo ${NotRunning[$i]} ; done)"
+            mail -s "$MailSubject" $MailRecipient <<< "$Message"
+        else
+            MailSubject="Failed services working again"
+            mail -s "$MailSubject" $MailRecipient < <(echo -e "$(server-id)\n\n$(cat "$LogFile")")
+        fi
+    else
+        "Errors were found. No email will be sent."
+    fi
+fi | logger -t "$Process"
+
+exit 0

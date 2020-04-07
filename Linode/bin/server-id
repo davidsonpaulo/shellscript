@@ -1,0 +1,25 @@
+#!/bin/bash
+
+getIP() {
+    ip route get 8.8.8.8 | awk 'NR==1 {print $NF}'
+}
+
+getInterface() {
+    ip route get 8.8.8.8 | awk '/dev/ {f=NR} f&&NR-1==f' RS=" "
+}
+
+getDomains() {
+    cat /etc/apache2/sites-enabled/*.conf |
+    grep "ServerName" |
+    awk '{ print $2 }' |
+    tr '\n' ' '
+    echo
+}
+
+IP=$(getIP)
+Domains=$(getDomains $IP)
+
+echo "Hostname: $(hostname)"
+echo "Domains: $Domains"
+
+exit 0

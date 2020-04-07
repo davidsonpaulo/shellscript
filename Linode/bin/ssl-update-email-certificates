@@ -1,0 +1,37 @@
+#!/bin/bash
+
+Domains="$(sed 's/^/mail./' /etc/ssl-email-domains | tr '\n' ' ')"
+Email="davidsonpaulo@gmail.com"
+WebRoot="/var/lib/roundcube"
+Certbot="$(which certbot)"
+
+if [ $EUID -ne 0 ] ; then
+    sudo -i $0
+    exit $?
+fi
+
+if [ -z "$Certbot" -o ! -x "$Certbot" ] ; then
+    echo "Error: command 'certbot' not found or not executable"
+    exit 2
+fi
+
+if [ ! -d "$WebRoot" ] ; then
+    echo "Error: directory '$WebRoot' does not exist or is not acessible."
+    exit 3
+fi
+
+echo "Email: $Email"
+echo "Domains: $Domains"
+echo "WebRoot: $WebRoot"
+
+Command="$Certbot certonly --webroot --webroot-path $WebRoot --renew-by-default --email $Email --text --agree-tos $(for Domain in $Domains ; do echo -n "-d $Domain " ; done)"
+
+echo "Executing command: $Command"
+
+if [ -n "$1" -a "$1" == "simulate" ] ; then
+    echo "Just a simulation, I won't run the command."
+else
+    $Command
+fi
+
+exit $?

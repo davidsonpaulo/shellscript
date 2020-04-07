@@ -1,0 +1,29 @@
+#!/bin/bash
+
+VarnishHost="127.0.0.1"
+VarnishPort="6082"
+VarnishSecret="/etc/varnish/secret"
+
+clearCache() {
+    Command="ban req.http.host ~ $1"
+    varnishadm -T ${VarnishHost}:${VarnishPort} -S $VarnishSecret <<< "$Command"
+}
+
+if [ $EUID -ne 0 ] ; then
+    sudo $0 "$@"
+    exit $?
+fi
+
+if [ -n "$1" ] ; then
+    while [ -n "$1" ] ;do
+        Domain="$1"
+        echo "=> Clearing cache for domain '$1'..."
+        clearCache "$Domain"
+        shift
+    done
+else
+    echo "Usage: $0 [domain] [[domain2] [domain3] ... [domainN]]"
+    exit 1
+fi
+
+exit 0

@@ -1,0 +1,12 @@
+#!/bin/bash
+
+source /usr/local/lib/email-functions
+
+if [ $EUID -ne 0 ] ; then
+    sudo -i "$0" "$@"
+    exit $?
+fi
+
+getEmail "$1"
+
+exit $?

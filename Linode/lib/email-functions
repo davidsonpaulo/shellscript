@@ -1,0 +1,159 @@
+#!/bin/bash
+
+MysqlDatabase="dovecot"
+MysqlUser="dovecot"
+MysqlDomainsTable="virtualDomains"
+MysqlUsersTable="virtual_users"
+MysqlAliasesTable="virtual_aliases"
+
+getPassword() {
+    /usr/local/bin/new-password
+}
+
+initMysqlDB() {
+    Password="$(getPassword)"
+    Query="CREATE DATABASE ${MysqlDatabase}; GRANT SELECT ON ${MysqlDatabase}.* TO '${MysqlUser}'@'localhost' identified by '${Password}'; FLUSH PRIVILEGES;"
+    echo "=> Creating database..."
+    mysql <<< "$Query"
+
+    if [ $? -eq 0 ] ; then
+        echo "Success! Password is: ${Password}"
+        echo "=> Creating tables..."
+        mysql ${MysqlDatabase} < /usr/local/lib/email-db-init.sql
+
+       [ $? -eq 0 ] && echo "Success!" || echo "Failed!"
+   else
+       echo "Failed!"
+   fi
+}
+
+getDomain() {
+    cut -d@ -f2 <<< "$1"
+}
+
+getDomainId() {
+    DomainIdQuery="SELECT id FROM ${MysqlDatabase}.${MysqlDomainsTable} WHERE name = '${1}';"
+    Result="$(mysql <<< "$DomainIdQuery" 2> /dev/null)"
+
+    if [ $(wc -l <<< "$Result") -eq 2 -a "$(sed -n '1p' <<< "$Result")" == "id" ] ; then
+        sed -n 2p <<< "$Result"
+    fi
+}
+
+addDomain() {
+    Query="INSERT INTO ${MysqlDatabase}.${MysqlDomainsTable} (name) VALUES ('${1}');"
+    Result="$(mysql <<< "$Query")"
+
+    echo "$Result"
+}
+
+genPassword() {
+    PasswordQuery="SELECT ENCRYPT('${1}', CONCAT('\$6\$', SUBSTRING(SHA(RAND()), -16)));"
+    mysql <<< "$PasswordQuery" | sed -n 2p
+}
+
+getEmail() {
+    Query="SELECT id, email FROM ${MysqlDatabase}.${MysqlUsersTable} WHERE email = '${1}'"
+    mysql <<< "$Query" 2> /dev/null
+}
+
+getAllEmailsFromDomain() {
+    Domain="$1"
+    DomainId="$(getDomainId "$1")"
+    if [ -n "$DomainId" ] ; then
+        Query="SELECT id, email FROM ${MysqlDatabase}.${MysqlUsersTable} WHERE domainId = '${DomainId}'"
+        mysql <<< "$Query"
+    else
+        echo "Domain '$1' doesn't exist"
+        return 1
+    fi
+}
+
+getAllEmails() {
+    Query="SELECT id, email FROM ${MysqlDatabase}.${MysqlUsersTable}"
+    mysql <<< "$Query"
+}
+
+addEmail() {
+    QueryInsert="INSERT INTO ${MysqlDatabase}.${MysqlUsersTable} (domainId, password, email)"
+    QueryValues="VALUES ( '${1}', '${2}', '${3}' );"
+    Query="${QueryInsert} ${QueryValues}"
+
+    mysql <<< "${Query}"
+    RETVAL=$?
+    return $RETVAL
+}
+
+deleteEmail() {
+    if [ "$(getEmail "$1" | sed -n 2p | awk '{ print $2 }')" == "$1" ] ; then
+        QueryDelete="DELETE FROM ${MysqlDatabase}.${MysqlUsersTable} WHERE email = '${1}';"
+        mysql <<< "${QueryDelete}"
+    else
+        echo "Account '$1' doesn't exist."
+        return 1
+    fi
+}
+
+updatePassword() {
+    echo "Updating password for ${1}..."
+    Query="UPDATE ${MysqlDatabase}.${MysqlUsersTable} SET password = ENCRYPT('$2', CONCAT('\$6\$', SUBSTRING(SHA(RAND()), -16))) WHERE email = '$1';"
+    mysql <<< "${Query}"
+    RETVAL=$?
+    return $RETVAL
+}
+
+getAlias() {
+    Query="SELECT id, source, destination FROM ${MysqlDatabase}.${MysqlAliasesTable} WHERE source = '${1}';"
+    mysql <<< "$Query" 2> /dev/null
+}
+
+getAllAliases() {
+    Query="SELECT id, source, destination FROM ${MysqlDatabase}.${MysqlAliasesTable};"
+    mysql <<< "$Query" 2> /dev/null
+}
+
+getAllAliasesFromDomain() {
+    Domain="$1"
+    DomainId="$(getDomainId "$1")"
+    if [ -n "$DomainId" ] ; then
+        Query="SELECT id, source, destination FROM ${MysqlDatabase}.${MysqlAliasesTable} WHERE source LIKE '%${Domain}';"
+        mysql <<< "$Query" 2> /dev/null
+    else
+        echo "Domain '$1' doesn't exist"
+        return 1
+    fi
+}
+
+addAlias() {
+    if [ $# -ne 2 ] ; then
+        echo "Usage: $0 [source] [destination]"
+        return 1
+    fi
+
+    Domain="$(getDomain "$1")"
+
+    if [ -n "$Domain" ] ; then
+        DomainId="$(getDomainId "$Domain")"
+    else
+        echo "Error: domain '${Domain}' doesn't exist."
+        return 1
+    fi
+
+    QueryInsert="INSERT INTO ${MysqlDatabase}.${MysqlAliasesTable} (domainId, source, destination)"
+    QueryValues="VALUES ( '${DomainId}', '${1}', '${2}' );"
+    Query="${QueryInsert} ${QueryValues}"
+
+    mysql <<< "${Query}"
+    RETVAL=$?
+    return $RETVAL
+}
+
+deleteAlias() {
+    if [ "$(getAlias "$1" | sed -n 2p | awk '{ print $2 }')" == "$1" ] ; then
+        QueryDelete="DELETE FROM ${MysqlDatabase}.${MysqlAliasesTable} WHERE source = '${1}';"
+        mysql <<< "${QueryDelete}"
+    else
+        echo "Alias '$1' doesn't exist"
+        return 1
+    fi
+}

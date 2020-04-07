@@ -1,0 +1,33 @@
+#!/bin/bash
+
+BackupDir="/home/davidson/Dropbox/Backup/Emails"
+EmailDomains="/etc/backup/emails"
+EmailRoot="/var/mail/vhosts"
+
+backupEmails() {
+    while read Domain ; do
+        EmailDir="${EmailRoot}/${Domain}"
+        BackupFile="${BackupDir}/${Domain}.tar.gz"
+
+        if [ -d "${EmailDir}" ] ; then
+            echo -n "=> Backing up emails from domain ${Domain}"
+            tar zcpf "${BackupFile}" "${EmailDir}" >/dev/null 2>&1
+
+            if [ $? -eq 0 ] ; then
+                echo " [   OK   ]"
+            else
+                echo " [ FAILED ]"
+            fi
+
+            chown davidson:davidson "${BackupFile}"
+        fi
+    done < $EmailDomains
+}
+
+if [ $EUID -ne 0 ] ; then
+    sudo -i $0
+    exit $?
+fi
+
+backupEmails
+exit $?

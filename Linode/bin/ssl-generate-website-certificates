@@ -1,0 +1,53 @@
+#!/bin/bash
+
+Email="davidsonpaulo@gmail.com"
+
+usage() { 
+    echo "$(basename $0) [domain]"
+    exit 1
+}
+
+if [ $EUID -ne 0 ] ; then
+    sudo -i $0 "$@"
+    exit $?
+fi
+
+if [ -z "$1" ] ; then
+    echo "\$#: $# [simulate]"
+    usage
+fi
+
+if [ ! -x $(which certbot) ] ; then
+    echo "Error: certbot not found or not executable"
+    exit 2
+fi
+
+domain="$1"
+ApacheDir="/etc/apache2/sites-enabled"
+ApacheSiteFile="${ApacheDir}/${domain}.conf"
+
+if [ ! -f "$ApacheSiteFile" ] ; then
+    echo "Error: file '$ApacheSiteFile' does not exist or is not acessible."
+    exit 1
+fi
+
+path="$(grep -E '^[[:space:]]*DocumentRoot' "$ApacheSiteFile" | awk '{ print $2 }')"
+
+if [ ! -d "$path" ] ; then
+    echo "Error: directory '$path' does not exist or is not acessible."
+    exit 3
+fi
+
+echo "Creating certificate for the following domains using webroot path '${path}':"
+echo " => ${domain}"
+echo " => www.${domain}"
+
+echo "Executing command: certbot certonly --webroot --webroot-path $path --renew-by-default --email ${Email} --text --agree-tos -d $domain -d www.${domain}"
+
+if [ -n "$2" -a "$2" == "simulate" ] ; then
+    echo "Just a simulation"
+else
+    certbot certonly --webroot --webroot-path $path --renew-by-default --email ${Email} --text --agree-tos -d $domain -d www.${domain}
+fi
+
+exit $?

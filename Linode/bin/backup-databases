@@ -1,0 +1,25 @@
+#!/bin/bash
+
+BackupDir="/home/davidson/Dropbox/Backup/Databases"
+Databases="/etc/backup/databases"
+
+backupDatabases() {
+    while read Database ; do
+        echo -n "=> Backing up database '$Database'"
+        mysqldump -u root --opt $Database > "${BackupDir}/${Database}.sql"
+
+        if [ $? -eq 0 ] ; then
+            echo " [   OK   ]"
+        else
+            echo " [ FAILED ]"
+        fi
+    done < $Databases
+}
+
+if [ "$USER" != "davidson" ] ; then
+    sudo -u davidson -i $0
+    exit $?
+fi
+
+backupDatabases
+exit $?

@@ -1,0 +1,43 @@
+#!/bin/bash
+
+BackupDir="/home/davidson/Dropbox/Backup/Configuration"
+ConfigurationFiles="/etc/backup/configuration"
+
+backupConfiguration() {
+    while read Line ; do
+        BackupName="$(cut -d: -f1 <<< "$Line")"
+        BackupFiles=()
+        
+        while read BackupFile ; do
+            if [ -r "$BackupFile" ] ; then
+                BackupFiles+=( "$BackupFile" )
+            fi
+        done <<< "$(cut -d: -f2- <<< "$Line" | tr ';' '\n')"
+
+        if [ ${#BackupFiles[@]} -gt 0 ] ; then
+            BackupFile="${BackupDir}/${BackupName}.tar.gz"
+            echo -n "=> Backing up $BackupName"
+
+            for (( i=0; i<${#BackupFiles[@]} ; i++)) ; do
+                echo "${BackupFiles[$i]}"
+            done |
+            tar zcpf "${BackupFile}" --files-from - >/dev/null 2>&1
+
+            if [ $? -eq 0 ] ; then
+                echo " [   OK   ]"
+            else
+                echo " [ FAILED ]"
+            fi
+
+            chown davidson:davidson "${BackupFile}"
+        fi
+    done < $ConfigurationFiles
+}
+
+if [ $EUID -ne 0 ] ; then
+    sudo -i $0
+    exit $?
+fi
+
+backupConfiguration
+exit $?

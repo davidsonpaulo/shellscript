@@ -1,0 +1,31 @@
+#!/bin/bash
+
+source /usr/local/lib/email-functions
+
+if [ $EUID -ne 0 ] ; then
+    sudo -i "$0" "$@"
+    exit $?
+fi
+
+Email="$(getEmail "$1")"
+Alias="$(getAlias "$1")"
+
+#if [ -n "$Email" ] ; then
+#    echo "Error: can't create alias because '$1' is an email account."
+#    exit 1
+#fi
+
+if [ -n "$Alias" ] ; then
+    awk '{ print "Error: alias", $2, "already exists and it forwards to", $3" }' <<< "$Alias"
+    exit 1
+fi
+
+addAlias "$1" "$2"
+RETVAL=$?
+
+if [ $RETVAL -eq 0 ] ; then
+    echo "Email address '${1}' succesfuly added."
+    exit 0
+fi
+
+exit $RETVAL

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+IPList="/etc/fail2ban/persistent.bans"
+Line="$@"
+NewIPList="$(echo "$(cat "$IPList" ; echo "$Line")" | sort -u)"
+echo "$NewIPList" > "$IPList"

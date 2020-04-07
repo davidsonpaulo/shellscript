@@ -1,0 +1,10 @@
+#!/bin/bash
+
+if [ $EUID -ne 0 ] ; then
+    sudo $0
+    exit $?
+fi
+
+varnishd -C -f /etc/varnish/default.vcl
+
+exit $?

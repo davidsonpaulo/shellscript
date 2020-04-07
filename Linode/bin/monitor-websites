@@ -1,0 +1,44 @@
+#!/bin/bash
+
+. /usr/local/lib/monitor-functions
+
+LogFile="${LogDir}/websites.log"
+MailSubject="Website has changed"
+
+if [ $EUID -eq 0 ] ; then
+    echo "[ERROR] You can't run this program as root."
+    exit 1
+fi
+
+if [ -d "$ConfigDir" ] ; then
+    if [ -f "$Websites" ] ; then
+        if [ $(wc -l < "$Websites") -gt 0 ] ; then
+            checkWebsites
+            
+            for ((i=0; i<${#LogFileContent[@]}; i++)) ; do
+                echo "${LogFileContent[$i]}"
+            done | tee "$LogFile"
+        else
+            echo "No websites to check in $Websites"
+        fi
+    else
+        echo "Error: file '$Websites' not found."
+    fi
+else
+    echo "Error: directory '$ConfigDir' not found."
+fi
+
+if  [ $Failed -eq 1  ] ; then
+    if [ x"$1" != "xnomail" ] ; then
+        set -x
+	    mail ${Attachments[@]} -s "$MailSubject" $MailRecipient < "$LogFile"
+        set +x
+    else
+        "Errors were found. No email will be sent."
+    fi
+else
+	echo
+	echo "No errors were found"
+fi
+
+exit 0

@@ -1,0 +1,28 @@
+#!/bin/bash
+
+ConfRootDir="/etc/letsencrypt"
+ConfRenew="${ConfRootDir}/renewal"
+
+checkExpiryDate() {
+    openssl x509 -noout -dates -in "$1" |
+    awk -F"=" '$1 == "notAfter" { print $2 }' |
+    awk '{ print $1, $2, $4 }'
+}
+
+if [ $EUID -ne 0 ] ; then
+    sudo $0
+    exit $?
+fi
+
+Expiry="$(TZ=GMT date -d '1 day' +"%d %b %Y")"
+
+for Conf in ${ConfRenew}/*.conf ; do
+    Cert="$(awk '$1 == "cert" { print $3 }' $Conf)"
+    CertExpiry="$(checkExpiryDate $Cert)"
+
+    if [ "$CertExpiry" == "$Expiry" ] ; then
+        echo "=> Renewing $Cert ($CertExpiry)"
+    else
+        echo "=> $Cert does not need to be renewed ($CertExpiry)"
+    fi
+done

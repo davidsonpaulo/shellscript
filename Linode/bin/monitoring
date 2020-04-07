@@ -1,0 +1,53 @@
+#!/bin/bash
+
+. /usr/local/lib/monitor-functions
+. /etc/monitoring/hostname
+
+listWebsites() {
+    cat "$Websites"
+}
+
+isWebsiteEnabled() {
+    [ -n "$(grep -E "^${Website}$" "$Websites")" ]
+}
+
+disableWebsite() {
+    if isWebsiteEnabled "$1" ; then
+        sed -ri "/^${1}$/d" "$Websites"
+        echo "Monitoring disabled for website '$1'"
+    else
+        echo "Monitoring for website '$1' is already disabled."
+    fi
+}
+
+enableWebsite() {
+    if isWebsiteEnabled "$1" ; then
+        echo "Monitoring for website '$1' is already enabled."
+    else
+        sed -ri "\$a${1}" "$Websites"
+        echo "Monitoring enabled for website '$1'"
+    fi
+}
+
+case "$1" in
+    'enable')
+        if [ -n "$2" ] ; then
+            enableWebsite "$2"
+        else
+            echo "Usage: $0 enable [website]"
+        fi
+        ;;
+    'disable')
+        if [ -n "$2" ] ; then
+            disableWebsite "$2"
+        else
+            echo "Usage: $0 disable [website]"
+        fi
+        ;;
+    *)
+        echo "Usage: $0 [enable|disable] [website]"
+        exit 1
+        ;;
+esac
+
+exit 0

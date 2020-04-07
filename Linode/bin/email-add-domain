@@ -1,0 +1,25 @@
+#!/bin/bash
+
+. /usr/local/lib/email-functions
+
+if [ $# -eq 0 ] ; then
+    echo "Usage: $0 [domain1] [domain2] ..."
+fi
+
+if [ $EUID -ne 0 ]; then
+    sudo $0 "$@"
+    exit $?
+fi
+
+while [ -n "$1" ] ; do
+    Domain="$1" ; shift
+
+    if [ -n "$(getDomainId "$Domain")" ] ; then
+        echo "=> Domain '${Domain}' already exists. Skipping..."
+    else
+        echo "=> Adding domain '${Domain}'..."
+        addDomain "${Domain}"
+    fi
+done
+
+exit 0

@@ -1,0 +1,11 @@
+#!/bin/bash
+
+if [ $EUID -ne 0 ] ; then
+    sudo "$0"
+    exit $?
+fi
+
+echo "Memcached...$(echo 'flush_all' | nc localhost 11211)"
+echo "Varnish...$(service varnish restart)OK"
+
+exit 0

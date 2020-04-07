@@ -1,0 +1,47 @@
+#!/bin/bash
+
+if [ -n "$1" ] ; then
+    Domain="$1"
+    DbName="$(tr "." "_" <<< "$Domain")"
+    DbUser="$DbName"
+    DbPassword="$(new-password)"
+    AdminUser="davidson"
+    AdminPassword="$(new-password)"
+    AdminEmail="davidsonpaulo@gmail.com"
+
+    if [ -n "$2" ] ; then
+        Title="$2"
+    else
+        Title="$Domain"
+    fi
+else
+    echo "Usage: $(basename $0) [domain] [[site title]]"
+    exit 1
+fi
+
+echo "[STEP 1] Downloading Wordpress"
+wp core download
+
+echo "[STEP 2] Creating MySQL database"
+mysql <<< "create database ${DbName}; grant all on ${DbName}.* to '${DbUser}'@'localhost' identified by '${DbPassword}'; flush privileges;"
+
+echo "[STEP 3] Generating wp-config.php"
+wp config create --dbname="${DbName}" --dbuser="${DbUser}" --dbpass="${DbPassword}"
+
+echo "[STEP 4] Installing Wordpress"
+wp core install --url="${Domain}" --title="${Title}" --admin_user="${AdminUser}" --admin_password="${AdminPassword}" --admin_email="${AdminEmail}" --skip-email
+
+echo "[FINISHED]"
+echo
+echo "Installation details:"
+echo
+echo "- URL: ${Domain}"
+echo "- Title: ${Title}"
+echo "- DB name: ${DbName}"
+echo "- DB user: ${DbUser}"
+echo "- DB password: ${DbPassword}"
+echo "- Admin user: ${AdminUser}"
+echo "- Admin password: ${AdminPassword}"
+echo "- Admin email: ${AdminEmail}"
+
+exit 0

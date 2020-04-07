@@ -1,0 +1,33 @@
+ConfigDir="/etc/monitoring"
+Websites="${ConfigDir}/websites"
+SslCertificates="${ConfigDir}/certificates"
+Services="${ConfigDir}/services"
+LogDir="/var/log/monitoring"
+MailRecipient=""
+LogFileContent=()
+Attachments=()
+Failed=0
+
+checkSslCertificate() {
+    Connect="$1"
+    Server="$(cut -d: -f1 <<< "$Connect")"
+    echo | openssl s_client -showcerts -servername "$Server" -connect "$Connect" 2>/dev/null | 
+    openssl x509 -inform pem -noout -text |
+    sed -r '/Not After : /!d; s/^.+ : (.+)$/\1/'
+}
+
+checkSslCertificates() {
+    while read Connect ; do
+        echo -n "$Connect - certificate expires on "
+		Expires="$(checkSslCertificate "$Connect")"
+		echo -n $Expires" "
+        isInTheFuture "$Expires" && echo "[   OK   ]" || echo "[ FAILED ]"
+    done < "$SslCertificates"
+}
+
+isInTheFuture() {
+	Date="$(date -d "$1" +%s)"
+	Now="$(date -d now +%s)"
+
+	[ $Date -gt $Now ]
+}

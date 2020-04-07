@@ -1,0 +1,28 @@
+#!/bin/bash
+
+postfixValues() {
+    postconf milter_protocol
+    postconf milter_default_action
+    postconf smtpd_milters
+    postconf non_smtpd_milters
+}
+
+if [ $EUID -ne 0 ] ; then
+    sudo $0
+    exit $?
+fi
+
+echo "Postconf main.cf old values"
+echo "==========================="
+postfixValues
+
+echo
+echo "Postconf main.cf new values"
+echo "==========================="
+postconf -e milter_protocol=6
+postconf -e milter_default_action=accept
+postconf -e smtpd_milters=inet:localhost:12345
+postconf -e non_smtpd_milters=inet:localhost:12345
+postfixValues
+
+exit 0

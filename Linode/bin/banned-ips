@@ -1,0 +1,29 @@
+#!/bin/bash
+
+if [ $EUID -ne 0 ] ; then
+    sudo $0
+    exit $?
+fi
+
+Jails=( "sshd" "wordpress" "recidive" )
+
+for (( i=0 ; i<${#Jails[@]} ; i++ )) ; do
+    Jail=${Jails[$i]}
+    Status="$(fail2ban-client status $Jail)"
+    Count=$(grep -F -- "- Currently banned:" <<< "$Status" | cut -c25-)
+
+    echo "[${Jail}]"
+    echo
+    echo "- ${Count} IPs blocked"
+
+    if [ $Count -gt 0 ] ; then
+        BannedIPs="$(grep -F -- "- Banned IP list:" <<< "$Status" | cut -c23- | tr ' ' '\n')"
+
+        echo
+        echo "$BannedIPs" | xargs -i geoiplookup "{}" | sort | uniq -c | sort -rn | sed 's/GeoIP Country Edition: //'
+    fi
+
+    echo
+done
+
+exit 0

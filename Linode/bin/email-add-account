@@ -1,0 +1,40 @@
+#!/bin/bash
+
+source /usr/local/lib/email-functions
+
+if [ $EUID -ne 0 ] ; then
+    sudo -i "$0" "$@"
+    exit $?
+fi
+
+Domain="$(getDomain "$1")"
+DomainId="$(getDomainId "$Domain")"
+
+if [ -n "$2" ] ; then
+    Password="$(genPassword "$2")"
+else
+    DisplayPassword="$(getPassword)"
+    Password="$(genPassword "$DisplayPassword")"
+fi
+
+if [ -n "$DomainId" ] ; then
+    addEmail "$DomainId" "$Password" "$1"
+    RETVAL=$?
+
+    if [ $RETVAL -eq 0 ] ; then
+        echo "Email address '${1}' succesfuly added."
+
+        if [ -n "$DisplayPassword" ] ; then
+            echo "=> Password: $DisplayPassword"
+        fi
+
+        exit 0
+    fi
+
+    exit $RETVAL
+else
+    echo "Error: domain '${Domain}' doesn't exists."
+    exit 1
+fi
+
+exit 0

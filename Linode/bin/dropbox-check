@@ -1,0 +1,10 @@
+#!/bin/bash
+# Updated: Sat Oct 27 01:00:29 UTC 2018
+
+Status="$(dropbox status)"
+
+if [ "$Status" == "Dropbox isn't running!" ] ; then
+    dropbox start
+else
+    echo "$Status"
+fi | tee ~/dropbox.log

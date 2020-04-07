@@ -1,0 +1,26 @@
+#!/bin/bash
+
+source /usr/local/lib/email-functions
+
+ValidCommands="$(declare -F | awk '{ print $3 }')"
+
+usage() {
+    echo "Valid commands:"
+    sed 's/^/ - &/' <<< "$ValidCommands"
+}
+
+if [ $# -eq 0 ] ; then
+    usage
+    exit 1
+fi
+
+while read Command ; do
+    if [ "$1" == "$Command" ] ; then
+        Command="$1"
+        shift
+        $Command "$@"
+        exit $?
+    fi
+done <<< "$ValidCommands"
+
+usage

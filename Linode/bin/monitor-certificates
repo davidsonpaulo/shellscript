@@ -1,0 +1,39 @@
+#!/bin/bash
+
+. /usr/local/lib/monitor-functions
+. /etc/monitoring/hostname
+
+LogFile="${LogDir}/certificates.log"
+MailSubject="[${Hostname}] SSL certificate expired"
+
+if [ $EUID -eq 0 ] ; then
+    echo "[ERROR] You can't run this program as root."
+    exit 1
+fi
+
+if [ -d "$ConfigDir" ] ; then
+    if [ -f "$SslCertificates" ] ; then
+        if [ $(wc -l < "$SslCertificates") -gt 0 ] ; then
+            checkSslCertificates || Failed=1
+        else
+            echo "No SSL certificates to check in $SslCertificates"
+        fi
+    else
+        echo "Error: file '$SslCertificates' not found."
+    fi
+else
+    echo "Error: directory '$ConfigDir' not found."
+fi | tee "$LogFile"
+
+if [ $Failed -eq 1 ] ; then
+    if [ x"$1" != "xnomail" ] ; then
+	    mail -s "$MailSubject" $MailRecipient < "$LogFile"
+    else
+        echo "Errors were found. No email will be sent."
+    fi
+else
+	echo
+	echo "No errors were found"
+fi
+
+exit 0

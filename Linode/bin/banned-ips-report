@@ -1,0 +1,12 @@
+#!/bin/bash
+
+if [ $EUID -ne 0 ]; then
+    sudo -i $0
+    exit $?
+fi
+
+MAILRC="/etc/mail.rc"
+MailSubject="[$(cat /etc/linode-hostname)] List of banned IPs"
+MailRecipient="davidsonpaulo@gmail.com"
+mail -s "$MailSubject" $MailRecipient < <(banned-ips)
+exit $?

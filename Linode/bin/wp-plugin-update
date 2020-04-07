@@ -1,0 +1,67 @@
+#!/bin/bash
+
+Process="$(basename $0)"
+ConfigDir="/etc/wordpress"
+Websites="${ConfigDir}/websites"
+Dirs="${ConfigDir}/directories"
+Blacklist="${ConfigDir}/plugin-update-blacklist"
+WpOptions="--all"
+MailRecipient="davidsonpaulo@gmail.com"
+
+if [ -n "$1" ] ; then
+    case "$1" in
+        'patch') WpOptions="${WpOptions} --patch" ;;
+        'minor') WpOptions="${WpOptions} --minor" ;;
+        'all') true ;;
+        *) echo "Usage: $0 [patch|minor|all]" ; exit 1 ;;
+    esac
+fi
+
+if [ $EUID -ne 0 ] ; then
+    sudo -i MAILRC="/etc/mail.rc" $0 "$@"
+    exit $?
+fi
+
+if which wp > /dev/null 2>&1 ; then
+    if [ -f "$Websites" -a -f "$Dirs" ] ; then
+        while read Line ; do
+            Website="$(cut -d: -f1 <<< "$Line")"
+            DirID="$(cut -d: -f2 <<< "$Line")"
+            Basedir="$(awk -F: '$1 == "'$DirID'" { print $2 }' "$Dirs")"
+            User="$(awk -F: '$1 == "'$DirID'" { print $3 }' "$Dirs")"
+            Dir="${Basedir}/${Website}/public_html"
+            Exclude=
+
+            if [ -d "${Dir}/wp-content" ] ; then
+                cd "$Dir"
+
+                if [ -f "$Blacklist" ] ; then
+                    Exclude="$(awk -F: '$1 == "'${Website}'" { print $2 }' "$Blacklist")"
+                fi
+
+                if [ -n "$Exclude" ] ; then
+                    wp plugin update $WpOptions --exclude=$Exclude
+                else
+                    wp plugin update $WpOptions
+                fi | logger -s -t "${Process}/${Website}"
+
+                if [ "$1" == "minor" ] ; then
+                    UpdateAll="$(wp plugin update --all --dry-run)"
+
+                    if [ "$UpdateAll" != "No plugin updates available." ] ; then
+                        MailSubject="[Plugins] Updates pending - ${Website}"
+                        mail -s "$MailSubject" $MailRecipient <<< "$UpdateAll"
+                    fi
+                fi
+            fi
+        done < "$Websites"
+    else
+        [ ! -f "$Websites" ] && echo "Error: '$Websites' not found."
+        [ ! -f "$Dirs" ] && echo "Error: '$Dirs' not found."
+    fi
+else
+    echo "Error: 'wp' not found"
+    exit 1
+fi 2>&1 | logger -s -t "$Process"
+
+exit 0

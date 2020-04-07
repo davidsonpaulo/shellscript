@@ -1,0 +1,51 @@
+#!/bin/bash
+
+Process="$(basename $0)"
+ConfigDir="/etc/wordpress"
+Websites="${ConfigDir}/websites"
+WpOptions="--all"
+MailRecipient="davidsonpaulo@gmail.com"
+
+if [ -n "$1" ] ; then
+    case "$1" in
+        'patch') WpOptions="${WpOptions} --patch" ;;
+        'minor') WpOptions="${WpOptions} --minor" ;;
+        'all') true ;;
+        *) echo "Usage: $0 [patch|minor|all]" ; exit 1 ;;
+    esac
+fi
+
+if [ "$USER" != "www-data" ] ; then
+    sudo -u www-data MAILRC="/etc/mail.rc" $0 "$@"
+    exit $?
+fi
+
+if which wp > /dev/null 2>&1 ; then
+    if [ -f "$Websites" ] ; then
+        while read Website ; do
+            Dir="/var/www/${Website}/public_html"
+
+            if [ -d "${Dir}/wp-content" ] ; then
+                cd "$Dir"
+                echo "UPDATE"
+                #wp plugin update $WpOptions | logger -t "${Process}/${Website}"
+
+                if [ "$1" == "minor" ] ; then
+                    UpdateAll=$(wp plugin update --all --dry-run)
+
+                    if [ "$UpdateAll" != "No plugin updates available." ] ; then
+                        MailSubject="[${Website}] Plugin updates pending"
+                        mail -s "$MailSubject" $MailRecipient <<< "$UpdateAll"
+                    fi
+                fi
+            fi
+        done < "$Websites"
+    else
+        echo "Error: '$Websites' not found."
+    fi
+else
+    echo "Error: 'wp' not found"
+    exit 1
+fi #2>&1 | logger -t "$Process"
+
+exit 0

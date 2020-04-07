@@ -1,0 +1,59 @@
+#!/bin/bash
+
+Process="$(basename $0)"
+ConfigDir="/etc/wordpress"
+Websites="${ConfigDir}/websites"
+Dirs="${ConfigDir}/directories"
+WpOptions=""
+MailRecipient="davidsonpaulo@gmail.com"
+
+if [ -n "$1" ] ; then
+    case "$1" in
+        'minor') WpOptions="${WpOptions} --minor" ;;
+        'major') true ;;
+        *) echo "Usage: $0 [minor|major]" ; exit 1 ;;
+    esac
+fi
+
+if [ $EUID -ne 0 ] ; then
+    sudo MAILRC="/etc/mail.rc" $0 "$@"
+    exit $?
+fi
+
+if which wp > /dev/null 2>&1 ; then
+    if [ -f "$Websites" -a -f "$Dirs" ] ; then
+        while read Line ; do
+            Website="$(cut -d: -f1 <<< "$Line")"
+            DirID="$(cut -d: -f2 <<< "$Line")"
+            Basedir="$(awk -F: '$1 == "'$DirID'" { print $2 }' "$Dirs")"
+            User="$(awk -F: '$1 == "'$DirID'" { print $3 }' "$Dirs")"
+            Dir="${Basedir}/${Website}/public_html"
+
+            if [ -d "${Dir}/wp-content" ] ; then
+                cd "$Dir"
+                wp core update $WpOptions 2>&1 | logger -s -t "${Process}/${Website}"
+
+                if [ "$1" == "minor" ] ; then
+                    MajorUpdate="$(wp core check-update)"
+
+                    if ! grep "^Success:" <<< "$MajorUpdate" >/dev/null ; then
+                        InstalledVersion="$(wp --no-sudo core version)"
+                        AvailableVersion="$(sed -n 2p <<< "$MajorUpdate" | awk '{ print $1 }')"
+                        LogMessage="Update pending: ${InstalledVersion} => ${AvailableVersion}"
+                        MailSubject="[Wordpress] Update pending for ${Website}: ${InstalledVersion} => ${AvailableVersion}"
+                        echo "$LogMessage"
+                        mail -s "$MailSubject" $MailRecipient <<< "$UpdateAll"
+                    fi
+                fi 2>&1 | logger -s -t "${Process}/${Website}"
+            fi
+        done < "$Websites"
+    else
+        [ ! -f "$Websites" ] && echo "Error: '$Websites' not found." | logger -s -t "${Process}/${Website}"
+        [ ! -f "$Dirs" ] && echo "Error: '$Dirs' not found." | logger -s -t "${Process}/${Website}"
+    fi
+else
+    echo "Error: 'wp' not found" | logger -s -t "$Process"
+    exit 1
+fi
+
+exit 0

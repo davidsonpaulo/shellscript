@@ -1,0 +1,42 @@
+#!/bin/bash
+
+RealPath="$(realpath "$0")"
+RealDir="$(dirname "$RealPath")"
+Binary="${RealDir}/wp.bin"
+ConfigDir="/etc/wordpress"
+Websites="${ConfigDir}/websites"
+Dirs="${ConfigDir}/directories"
+
+
+if [ ! -f "$Binary" ] ; then
+    echo "Error: ${Binary} not found"
+    exit 1
+fi
+
+CurDir="$(realpath "$PWD")"
+User="$(stat -c '%U' "$CurDir")"
+
+if [ -f "$Websites" -a -f "$Dirs" ] ; then
+    while read Website ; do
+        Domain="$(cut -d: -f1 <<< "$Website")"
+        DirID="$(cut -d: -f2 <<< "$Website")"
+        Dir="$(awk -F: '$1 == "'$DirID'" { print $2 }' "$Dirs")"
+        Path="${Dir}/${Domain}/public_html"
+
+        if [ -d "$Path" ] ; then
+            Path="$(realpath "$Path")"
+
+            if [ "$Path" == "$CurDir" ] ; then
+                User="$(awk -F: '$1 == "'$DirID'" { print $3 }' "$Dirs")"
+                break
+            fi
+        fi
+    done < "$Websites"
+fi
+
+if [ "$User" != "root" -a "$User" != "$(whoami)" ] ; then
+    sudo -u $User "$Binary" "$@"
+    exit $?
+fi
+
+exec "$Binary" "$@"
