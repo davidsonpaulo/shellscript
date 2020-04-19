@@ -1,0 +1,16 @@
+#!/bin/bash
+
+Input="$1"
+Output="$2"
+
+getSedCommand() {
+    grep -E '\b[0-9]+px\b' "$1" | 
+    sed -r 's/.*\b([0-9]+)px\b.*/\1/' | 
+    sort -nu | 
+    awk '{ print " -e \"s/\\b" $1 "px\\b/" $1 / 16 "em/g\"" }' |
+    tr -d '\n'
+}
+
+echo "Converting px to em in '$Input' and saving into '$Output'..."
+eval sed "$(getSedCommand "$Input")" "$Input" > "$Output"
+echo "Done!"

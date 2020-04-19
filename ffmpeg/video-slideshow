@@ -1,0 +1,79 @@
+#!/bin/bash
+
+ffmpeg_input="-y -f rawvideo -pix_fmt yuv420p -r 30"
+ffmpeg_map="-map 0:v -map 1:a"
+ffmpeg_video="-f mp4 -movflags faststart -c:v libx264 -profile:v high -level:v 4.0 -g 15 -bf 2 -b:v 8192k -pix_fmt yuv420p"
+ffmpeg_audio="-c:a aac -ar 48000 -b:a 384k -shortest"
+
+video_from_slides() {
+    if [ "$6" == "landscape" ] ; then
+        Width="1920"
+        Height="1080"
+        Output="out.yuv"
+    else
+        Width="1080"
+        Height="1920"
+        Output="out-p.yuv"
+    fi
+
+    melt \
+        "$1" out=0 \
+        "$2" out=119 -mix 30 -mixer luma \
+        "$3" out=119 -mix 30 -mixer luma \
+        "$4" out=119 -mix 30 -mixer luma \
+        "$5" out=179 -mix 30 -mixer luma \
+        -consumer avformat:${Output} r=30 width=${Width} height=${Height} vcodec=rawvideo pix_fmt=yuv420p an=1
+
+    if [ $? -eq 0 -a -n "$7" ] ; then
+        echo "[EXECUTING] ffmpeg -hide_banner $ffmpeg_input -s:v ${Width}x${Height} -i \"$Output\" -i \"$7\" $ffmpeg_map $ffmpeg_video $ffmpeg_audio \"${Basename}_${6}.mp4\""
+        ffmpeg -hide_banner $ffmpeg_input -s:v ${Width}x${Height} -i "$Output" -i "$7" $ffmpeg_map $ffmpeg_video $ffmpeg_audio "${Basename}_${6}.mp4"
+
+        if [ "$6" == "landscape" ] ; then
+            echo "[EXECUTING] ffmpeg -hide_banner $ffmpeg_input -s:v ${Width}x${Height} -i \"$Output\" -i \"$7\" $ffmpeg_map $ffmpeg_video -vf scale=1280:-2 $ffmpeg_audio \"${Basename}_twitter.mp4\""
+            ffmpeg -hide_banner $ffmpeg_input -s:v ${Width}x${Height} -i "$Output" -i "$7" $ffmpeg_map $ffmpeg_video -vf scale=1280:-2 $ffmpeg_audio "${Basename}_twitter.mp4"
+        fi
+        
+        if [ $? -eq 0 ] ; then
+            rm -vf "$Output"
+        fi
+    fi
+}
+
+Input="$1"
+
+if [ ! -f "$Input" ] ; then
+    echo "Can't find file '$Input'"
+    exit 1
+fi
+
+Basename="$(rev <<< "$Input" | cut -d. -f2- | rev)"
+Extension="$(rev <<< "$Input" | cut -d. -f1 | rev)"
+Slides=( 
+    "white-background.png" 
+    "$Basename (1).${Extension}"
+    "$Basename (2).${Extension}" 
+    "$Basename (3).${Extension}" 
+    "$Input" )
+SlidesPortrait=(
+    "white-background-p.png"
+    "$Basename (1)-p.${Extension}"
+    "$Basename (2)-p.${Extension}" 
+    "$Basename (3)-p.${Extension}" 
+    "${Basename}-p.${Extension}" )
+Audio="../../audio/$(basename "$PWD")/${Basename}.wav"
+
+
+if [ ! -f "$Audio" ] ; then
+    echo "Can't find audio file '$2'"
+    exit 1
+fi
+
+video_from_slides "${Slides[@]}" landscape "$Audio"
+
+for (( i=0; i<${#Slides[@]}; i++ )) ; do
+    if [ ! -f "${SlidesPortrait[$i]}" ] ; then
+        convert -gravity center -crop 1080x1080+0+0 -background white -resize 1080x1920 -extent 1080x1920 "${Slides[$i]}" "${SlidesPortrait[$i]}"
+    fi
+done
+
+video_from_slides "${SlidesPortrait[@]}" portrait "$Audio"

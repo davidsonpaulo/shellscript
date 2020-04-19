@@ -1,0 +1,42 @@
+#!/bin/bash
+
+toHex() {
+    printf "%02X" "0x$(echo "obase=16; $1" | bc)"
+}
+
+toRgb() {
+    echo "$((16#$1))"
+}
+
+mixColors() {
+    Red1="$(cut -c1-2 <<< "$1")"
+    Green1="$(cut -c3-4 <<< "$1")"
+    Blue1="$(cut -c5-6 <<< "$1")"
+
+    Red2="$(cut -c1-2 <<< "$2")"
+    Green2="$(cut -c3-4 <<< "$2")"
+    Blue2="$(cut -c5-6 <<< "$2")"
+
+    echo "$Red1 $Green1 $Blue1"
+    echo "$Red2 $Green2 $Blue2"
+
+    Red=$((($(toRgb $Red1)*$3+$(toRgb $Red2)*(100-$3))/100))
+    Green=$((($(toRgb $Green1)*$3+$(toRgb $Green2)*(100-$3))/100))
+    Blue=$((($(toRgb $Blue1)*$3+$(toRgb $Blue2)*(100-$3))/100))
+
+    echo "$Red $Green $Blue"
+
+    echo "$(toHex $Red)$(toHex $Green)$(toHex $Blue)"
+}
+
+printRgb() {
+    Hex="$(tr -d '#' <<< "$1")"
+    Red="$(cut -c1-2 <<< "$Hex")"
+    Green="$(cut -c3-4 <<< "$Hex")"
+    Blue="$(cut -c5-6 <<< "$Hex")"
+    echo "rgb($((16#$Red)), $((16#$Green)), $((16#$Blue)))"
+}
+
+mixColors $1 $2 $3
+
+exit 0

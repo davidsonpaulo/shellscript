@@ -1,0 +1,6 @@
+#!/bin/bash
+
+echo "$1" |
+tr '[:upper:]' '[:lower:]' |
+tr '[:space:]' '-' |
+sed -r -e 's/[^[:alnum:]-]//g' -e 's/-$/\n/'

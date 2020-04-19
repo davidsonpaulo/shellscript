@@ -1,0 +1,7 @@
+#!/bin/bash
+
+input_file="$1"
+crop_offset="+30+130"
+crop_size="$(rev <<< "$input_file" | cut -d- -f1 | cut -d. -f2 | rev)"
+
+convert -crop ${crop_size}${crop_offset} "$input_file" "$input_file"

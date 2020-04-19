@@ -1,0 +1,79 @@
+#!/bin/bash
+
+Url="$1"
+MaxFontSize=90
+
+if [ -f "haiku" ] ; then
+    Haiku="$(cat haiku)"
+else
+    Haiku="$(lynx -reload -dump "$Url")"
+
+    if [ -n "$(grep "IFRAME" <(sed -n '10,21p' <<< "$Haiku"))" ] ; then
+        Lines="19,21"
+    else
+        Lines="15,17"
+    fi
+
+    Haiku="$(sed -rn -e '10p' -e "${Lines}p" <<< "$Haiku" | sed -r 's/^[[:space:]]+//')"
+fi
+
+Phrases=( "$(sed -n 2p <<< "$Haiku")" "$(sed -n 3p <<< "$Haiku")" "$(sed -n 4p <<< "$Haiku")" )
+Adjust=0
+
+if [ -n "$2" ] ; then
+    Adjust="$2"
+fi
+
+Width="$((950-Adjust))"
+Longer=0
+
+Title="$(head -n 1 <<< "$Haiku")"
+TitleLength=$(wc -c <<< "$Title")
+TitleMaxSize=$((Width * 90 / TitleLength / 35))
+
+if [ $TitleMaxSize -gt $MaxFontSize ] ; then
+    TitleMaxSize=$MaxFontSize
+fi
+
+echo "${Title}: $TitleLength"
+for i in $(seq 0 2) ; do
+    Phrase="${Phrases[$i]}"
+    Length="$(wc -c <<< "$Phrase")"
+
+    if [ $Length -gt $Longer ] ; then
+        Longer=$Length
+    fi
+
+    echo "$Phrase: $Length"
+done
+
+FontSize=$((Width * 90 / Longer / 35))
+TitleSize=$((FontSize * 15 / 10))
+
+if [ $TitleSize -gt $TitleMaxSize ] ; then
+    TitleSize=$TitleMaxSize
+fi
+
+echo "TitleSize: $TitleSize"
+
+genSvg() {
+    echo '<?xml version="1.0" standalone="no"?>'
+    echo '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">'
+    echo '<svg width="1920px" height="1080px" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg" version="1.1">'
+    echo '  <rect x="0" y="0" width="1920" height="1080" fill="white" />'
+    echo '    <text x="960" y="540" font-family="CMU Serif" font-size="'"$1"'" text-anchor="middle" fill="#d80041;">'"$2"'</text>'
+    echo '</svg>'
+}
+
+genFrames() {
+    TitleSize="$1"
+    Title="$2"
+    Filename="$(LC_ALL=C sed 's/[^[:blank:][:print:]]//g' <<< "$Title")"
+
+    SvgOut="$(mktemp --suffix=".svg")"
+    genSvg "$TitleSize" "$Title" > "$SvgOut"
+    inkscape -z "$SvgOut" -e "${Filename}.png"
+    rm -vf "$SvgOut"
+}
+
+genFrames "$TitleSize" "$Title"

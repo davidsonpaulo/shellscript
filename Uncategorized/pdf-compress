@@ -1,0 +1,24 @@
+#!/bin/bash
+
+usage() {
+    echo "Usage: $0 [input file] [output file]"
+    exit 3
+}
+
+if [ -n "$1" ] ; then
+    if [ ! -f "$1" ] ; then
+        echo "Error: file '$1' does not exists."
+        exit 1
+    elif [ "$(file -bi "$1" | cut -d';' -f1)" != "application/pdf" ] ; then
+        echo "Error: file '$1' is not a PDF file."
+        exit 2
+    elif [ ! -n "$2" ] ; then
+        usage
+    fi
+else
+    usage
+fi
+
+OPTIONS="-sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/screen -dNOPAUSE -dQUIET -dBATCH"
+
+gs $OPTIONS -sOutputFile="$2" "$1"

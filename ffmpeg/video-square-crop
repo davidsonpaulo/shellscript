@@ -1,0 +1,11 @@
+#!/bin/bash
+
+Dir="."
+
+if [ -n "$2" ] ; then
+    if [ -d "$2" ] ; then
+        Dir="$2"
+    fi
+fi
+
+ffmpeg -i "$1" -filter:v "crop=720:720:280:0" -c:v libx264 -preset slow -crf 18 -c:a copy -pix_fmt yuv420p "${Dir}/$(rev <<< "$1" | cut -d. -f2 | rev) (square).mp4"

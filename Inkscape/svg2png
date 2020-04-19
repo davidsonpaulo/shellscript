@@ -1,0 +1,15 @@
+#!/bin/bash
+#
+# Convert an SVG file into PNG (1920x1080 pixels)
+#
+# If no argument is provided, it's going to use *.SVG (uppercase)
+
+if [ -n "$1" ] ; then
+    Args="$@"
+else
+    Args="*.SVG"
+fi
+
+for file in "$Args" ; do
+    inkscape -z $file -w 1920 -h 1080 -e ${file%SVG}png
+done

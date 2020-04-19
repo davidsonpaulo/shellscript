@@ -1,0 +1,42 @@
+#!/bin/bash
+
+NetDevice="enp0s3"
+
+addIP() {
+    if [ -n "$(ifconfig | awk '$1 == "inet" && $2 == "'$1'" { print }')" ] ; then
+        return 0
+    else
+        if ! ping -c 1 -w 3 $1 > /dev/null ; then
+            if ifconfig ${NetDevice}:1 $1 netmask $2 ; then
+                return 0
+            fi
+        fi
+    fi
+
+    return 1
+}
+
+mainRoutine() {
+    if ! addIP $1 $2 ; then
+        echo "[FAILED] Can't enable IP $1 on interface $NetDevice"
+        exit 1
+    else
+        echo "[  OK  ] IP $1 activated on interface $NetDevice"
+    fi
+}
+
+if [ $# -eq 2 ] ; then
+    ExtraIP="$1"
+    Netmask="$2"
+else
+    echo "Usage: $0 [IP] [Netmask]"
+    exit 1
+fi
+
+if [ $EUID -eq 0 ] ; then
+    mainRoutine $ExtraIP $Netmask
+else
+    sudo $0 "$@"
+fi
+
+exit 0
