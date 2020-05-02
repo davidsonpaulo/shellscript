@@ -1,4 +1,0 @@
-#!/bin/bash
-
-ffmpeg -i "$1" -f h264 -an -c:v copy -bsf:v h264_mp4toannexb Video.h264
-ffmpeg -i "$1" -f adts -vn -c:a copy Audio.aac

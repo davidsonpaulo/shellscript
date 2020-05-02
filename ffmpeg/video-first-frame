@@ -1,3 +1,0 @@
-#!/bin/bash
-
-ffmpeg -y -i "$1" -q:v 1 -frames:v 1 screenshot.jpg

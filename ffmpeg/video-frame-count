@@ -1,3 +1,0 @@
-#!/bin/bash
-
-mediainfo "$1" --Output="Video;%FrameCount%"

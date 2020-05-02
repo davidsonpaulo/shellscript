@@ -1,8 +1,0 @@
-#!/bin/bash
-
-Input="$1"
-Output="$(rev <<< "$Input" | cut -d. -f2- | rev)-libx264.mp4"
-
-echo "Converting '$Input' => '$Output'"
-
-ffmpeg -hide_banner -threads 2 -i "$1" -movflags +faststart -c:v libx264 -profile:v high -level:v 4.0 -g 15 -bf 2 -b:v 8192k -pix_fmt yuv420p -c:a aac -b:a 384k "$Output"
