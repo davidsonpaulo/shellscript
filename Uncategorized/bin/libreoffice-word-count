@@ -1,0 +1,10 @@
+#!/bin/bash
+
+input="$1"
+output="${1%odt}txt"
+
+libreoffice --headless --convert-to txt:Text "$input" &> /dev/null &&
+wc -w < "$output"
+rm -f "$output"
+
+exit 0

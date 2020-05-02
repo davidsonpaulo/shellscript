@@ -1,0 +1,33 @@
+#!/bin/bash
+
+if [ -n "$1" ] ; then
+    while [ -n "$1" ] ; do
+        Input="$1"
+        shift
+
+        if [ -f "$Input" ] ; then
+            WidthInput="$(identify "$Input" | awk '{ print $3 }' | cut -d'x' -f1)"
+            Extension="$(rev <<< "$Input" | cut -d. -f1 | rev)"
+
+            for Width in 3840 1920 960 480 ; do
+                Tempfile="$(mktemp --suffix="$Extension")"
+                trap "rm -f '$Tempfile'" 1 2 3 6
+
+                if [ $Width -lt $WidthInput ] ; then
+                    convert -resize ${Width}x "$Input" "$Tempfile"
+                    Height="$(identify "$Tempfile" | awk '{ print $3 }' | cut -d'x' -f2)"
+                    mv -v "$Tempfile" "${Input%.${Extension}}-${Width}x${Height}.${Extension}"
+                else
+                    echo "Image '$Input' is less than $Width pixels wide ($WidthInput pixels). Ignoring..."
+                fi
+            done
+        else
+            echo "File '$Input' does not exist or can't be accessed."
+        fi
+    done
+else
+    echo "Usage: $0 [image1] [image2] [image3] ..."
+    exit 1
+fi
+
+exit 0

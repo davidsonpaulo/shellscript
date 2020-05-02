@@ -1,0 +1,73 @@
+#!/bin/bash
+#
+# Use this script to update the domain name of a WordPress website.
+#
+# Usage: wp-db-host-rename [DB User] [DB name] [original domain] [destination domain]
+
+DBDumpFile=
+DBDumpFileTranslated=
+
+dumpDB() {
+    echo "Saving database '$DBName' into '$DBDumpFile'..."
+    mysqldump --opt -u "$DBUser" -p "$DBName" > "$DBDumpFile"
+}
+
+translateDB() {
+    DBDumpFileTranslated="$(mktemp)"
+    echo "Translating '$TranslateFrom' => '$TranslateTo' and saving into '$DBDumpFileTranslated'..."
+    sed "s|${TranslateFrom}|${TranslateTo}|g" "$DBDumpFile" > "$DBDumpFileTranslated"
+}
+
+importDB() {
+    echo "Importing file '$DBDumpFileTranslated' into database '$DBName'..."
+    mysql -u "$DBUser" -p "$DBName" < "$DBDumpFileTranslated"
+}
+
+cleanup() {
+    if [ ! -n "$DBDumpFileTranslated" ] ; then
+        rm -f "$DBDumpFile"
+    else
+        rm -f "$DBDumpFileTranslated"
+        echo "Aborting. A database backup has been saved into '$DBDumpFile'."
+    fi
+}
+
+abort() {
+    cleanup
+    exit 1
+}
+
+if [ $# -eq 4 ] ; then
+    DBUser="$1"
+    DBName="$2"
+    TranslateFrom="$3"
+    TranslateTo="$4"
+else
+    echo "Usage: $0 [DB user] [DB name] [translate from] [translate to]"
+    exit 1
+fi
+
+DBDumpFile="$(mktemp)"
+
+trap cleanup 1 2 3 6
+
+if dumpDB ; then
+    if translateDB ; then
+        if importDB ; then
+            echo "Database '$DBName' successfuly translated and imported."
+            rm -f "$DBDumpFileTranslated"
+            echo "A backup of the original database has been saved into '$DBDumpFile'"
+        else
+            echo "Importing translated database failed."
+            abort
+        fi
+    else
+        echo "Database translation failed."
+        abort
+    fi
+else
+    echo "Saving database to a file failed."
+    abort
+fi
+
+exit 0

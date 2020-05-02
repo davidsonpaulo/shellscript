@@ -1,0 +1,9 @@
+ffmpeg_video_codec_instagram="-f mp4 -movflags faststart -c:v mpeg4 -b:v 8192k -strict experimental -profile:v high -level:v 4.0 -pix_fmt yuv420p"
+ffmpeg_audio_codec_instagram="-c:a aac -ar 48000 -b:a 384k"
+
+ffmpeg_video_codec_youtube="-f mp4 -movflags faststart -c:v libx264 -profile:v high -level:v 4.0 -g 15 -bf 2 -b:v 8192k -pix_fmt yuv420p"
+ffmpeg_audio_codec_youtube="-c:a aac -ar 48000 -b:a 384k"
+
+ffmpeg_video_codec_lossless="-f avi -c:v huffyuv"
+
+ffmpeg_convert_to_instagram="-c:v mpeg4 -vb 8192k -strict experimental -q:v 0 -c:a copy"

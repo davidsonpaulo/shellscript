@@ -1,0 +1,30 @@
+#!/bin/bash
+
+convertFile() {
+    flac -d "$1" -o - |
+    lame -m m --replaygain-accurate -V 4 -q 5 -b 8 -B 224 - "$(dirname "$1")/$(basename "${1%flac}")mp3"
+}
+
+convertDir() {
+    while read file ; do
+        convertFile "$file"
+    done < <(find "$1" -type f -name '*.flac')
+}
+
+if [ -n "$1" ] ; then
+    while [ -n "$1" ] ; do
+        if [ -f "$1" -a -n "$(grep -E '\.flac$' <<< "$1")" ] ; then
+            convertFile "$1"
+        elif [ -d "$1" ] ; then
+            convertDir "$1"
+        else
+            echo "Invalid file/directory '$1'. Skipping..."
+        fi
+
+        shift
+    done
+else
+    convertDir .
+fi
+
+exit 0

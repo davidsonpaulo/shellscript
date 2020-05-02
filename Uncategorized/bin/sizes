@@ -1,0 +1,56 @@
+#!/bin/bash
+
+_base_width=240
+_final_width=3840
+_widths=( 255 383 575 767 1023 1279 1919 2559 )
+_aspect_ratios=( "27:64" "9:16" "3:4" "1:1" "4:3" "16:9" "64:27" )
+
+printSizes() {
+    _rs="$(cut -d- -f1 <<< "$1")"
+    _re="$(cut -d- -f2 <<< "$1")"
+
+    for _r in $_rs $_re ; do
+        if [ $_r -gt $_final_width -o $_r -lt $_base_width ] ; then
+            continue
+        fi
+
+        for (( j=0 ; j<${#_aspect_ratios[@]} ; j++ )) ; do
+            _aw="$(cut -d: -f1 <<< "${_aspect_ratios[$j]}")"
+            _ah="$(cut -d: -f2 <<< "${_aspect_ratios[$j]}")"
+            _height=$((_r*_ah/_aw))
+
+            if [ $_height -gt $_final_width -o $_height -lt $_base_width ] ; then
+                continue
+            fi
+
+            _emm=$((_r/16))
+            _emx=$(((_r+1)/16))
+
+            if [ $_emm -gt $_emx ] ; then
+                _em=$_emm
+            else
+                _em=$_emx
+            fi
+
+            echo "${_r}x$((_height+1)) (${_aw}:${_ah}) $((_em-1)).9999em"
+        done
+    done
+}
+
+for (( i=0 ; i<${#_widths[@]} ; i++ )) ; do
+    _s=${_widths[$i]}
+    _rs=$((_s+1))
+    _re=${_widths[$((i+1))]}
+    
+    if [ $i -eq 0 ] ; then
+        _range="${_base_width}-${_s}"
+        printSizes "$_range"
+        _range="${_rs}-${_widths[$((i+1))]}"
+    elif [ $i -eq $((${#_widths[@]}-1)) ] ; then
+        _range="${_rs}-${_final_width}"
+    else
+        _range="${_rs}-${_re}"
+    fi
+
+    printSizes "$_range"
+done

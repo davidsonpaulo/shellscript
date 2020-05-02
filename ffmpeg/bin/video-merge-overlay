@@ -1,0 +1,59 @@
+#!/bin/bash
+
+PortraitMask="portrait.png"
+SquareMask="square.png"
+InputVideo="video"
+InterVideo="intermediate.avi"
+ffmpeg="ffmpeg -hide_banner -threads 2 -y"
+ffmpeg_video_lossless="-c:v huffyuv"
+ffmpeg_video_mov="-movflags faststart -c:v libx264 -profile:v high -level:v 4.0 -g 15 -bf 2 -b:v 8192k -pix_fmt yuv420p"
+ffmpeg_audio_aac="-c:a aac -b:a 384k"
+ffmpeg_audio_pcm="-c:a pcm_s16le"
+ffmpeg_silence="-f lavfi -i anullsrc=channel_layout=stereo:sample_rate="
+
+getAudioFrequency() {
+    echo "$(mediainfo "$1" | grep 'Sampling rate' | cut -d: -f2 | cut -d' ' -f2 | tr -d .)00"
+}
+
+getVideoDimensions() {
+    mediainfo "$InterVideo" | grep -E '\b(Width|Height)\b' | sed -r 's/[^0-9]//g'
+}
+
+overlayVideo() {
+    $ffmpeg -i "$InputVideo" $ffmpeg_video_lossless -c:a copy "$InterVideo"
+
+    if [ -n "$1" ] ; then
+        Width=1080
+        Height=1920
+        VideoDimensions="$(getVideoDimensions)"
+        VideoWidth="$(sed -n 1p <<< "$VideoDimensions")"
+        VideoHeight="$(sed -n 2p <<< "$VideoDimensions")"
+
+        if [ "$VideoWidth" -lt 1080 ] ; then
+            Height=$((Width*VideoHeight/VideoWidth))
+        fi
+
+        Skip="$((Height-1350-$1))"
+    else
+        Skip=0
+    fi
+
+    AudioFrequency="$(getAudioFrequency "$InterVideo")"
+
+    #$ffmpeg -i "$InputVideo" -i "$SquareMask" ${ffmpeg_silence}${AudioFrequency} \
+    #    -filter_complex "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1350:0:${Skip}[bg];[1:v]format=argb[fg];[bg][fg]overlay[v]" \
+    #    -map "[v]" -map "2:a" -frames:v 1 $ffmpeg_video_lossless $ffmpeg_audio_pcm -shortest -f avi frame.avi
+    #$ffmpeg -t 1 -loop 1 -i "firstframe.png" ${ffmpeg_silence}${AudioFrequency} \
+    #    $ffmpeg_video_lossless $ffmpeg_audio -frames:v 1 -shortest frame.avi
+    $ffmpeg -i "$InputVideo" -i "$PortraitMask" \
+        -filter_complex "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1350:0:${Skip}[bg];[1:v]format=argb[fg];[bg][fg]overlay[v]" \
+        -map "[v]" -map "0:a" $ffmpeg_video_mov -c:a copy -f mov Instagram.mov #$ffmpeg_video_lossless -c:a copy video.avi
+}
+
+concatenateVideos() {
+    #$ffmpeg -i "concat:${1}|${2}" $ffmpeg_video_mov $ffmpeg_audio_aac -f mp4 Instagram.mp4
+    ffmpeg -i "$2" $ffmpeg_video_mov $ffmpeg_audio_aac -f mp4 Instagram.mp4
+}
+
+overlayVideo $1
+#concatenateVideos frame.avi video.avi

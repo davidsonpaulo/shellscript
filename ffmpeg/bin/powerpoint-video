@@ -1,0 +1,48 @@
+#!/bin/bash
+
+Library="$(dirname "$(realpath $0)")/../lib/ffmpeg"
+
+if [ -f "$Library" ] ; then
+    . "$Library"
+else
+    echo "[ ERROR ] Library '$Library' not found"
+    exit 1
+fi
+
+usage() {
+    echo "$(basename $0) [timestamps] [audio file]"
+    exit 1
+}
+
+if [ $# -ne 2 ] ; then
+    usage
+fi
+
+Timestamps="$1"
+AudioFile="$2"
+ffmpeg="ffmpeg -y -hide_banner"
+
+echo "STEP 1: Generating slideshow and saving in 'video_only.avi'"
+echo "==========================================================="
+echo
+$ffmpeg -f concat -i "$Timestamps" $ffmpeg_video_codec_lossless -framerate 30 video_only.avi
+
+if [ $? -ne 0 ] ; then
+    echo "[FAILED] Aborting..."
+    exit 1
+fi
+
+echo
+echo "STEP 2: Merging audio track '${AudioFile}' into slideshow and saving in 'video.mp4'"
+echo "==================================================================================="
+echo
+$ffmpeg -i video_only.avi -i "$AudioFile" -map 0:v -map 1:a $ffmpeg_video_codec_youtube $ffmpeg_audio_codec_youtube -shortest video.mp4
+
+if [ $? -ne 0 ] ; then
+    echo "[FAILED] Check error messages."
+    exit 1
+else
+    echo "[  OK  ] Video slideshow saved in 'video.mp4'"
+fi
+
+exit 0
