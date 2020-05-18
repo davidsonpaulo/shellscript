@@ -1,15 +1,52 @@
 #!/bin/bash
 #
-# Convert an SVG file into PNG (1920x1080 pixels)
+# Convert an SVG file into PNG
 #
-# If no argument is provided, it's going to use *.SVG (uppercase)
+# Default values:
+#   - Width: 1920
+#   - Height: 1080
+#
+# Usage: svg2png [-w <width>] [-h <height>] [[file1] [file2] ... [fileN]]
+#
+# You can use wildcards as parameters for input files
+#   - Ex.: svg2png slide1-*.svg
 
-if [ -n "$1" ] ; then
-    Args="$@"
+Width=1920
+Height=1080
+
+ParsedOptions=$(
+  getopt -n "$0" -o "w:h:" -- "$@"
+) || exit
+eval "set -- $ParsedOptions"
+
+while [ -n "$1" ] ; do
+    case "$1" in
+        "-w") Width=$2 ; shift 2 ;;
+        "-h") Height=$2 ; shift 2 ;;
+        "--") shift ; break ;;
+    esac
+done
+
+if [ $Height -gt $Width ] ; then
+    echo "Using height = ${Height} pixels"
+    Size="-h ${Height}"
 else
-    Args="*.SVG"
+    echo "Using width = ${Width} pixels"
+    Size="-w ${Width}"
 fi
 
-for file in "$Args" ; do
-    inkscape -z $file -w 1920 -h 1080 -e ${file%SVG}png
-done
+if [ -n "$1" ] ; then
+    while [ -n "$1" ] ; do
+        if [ "$(file -b "$1" | awk '{ print $1 }')" == "SVG" ] ; then
+            Extension="$(rev <<< "$1" | cut -d. -f1 | rev)"
+            echo "- Converting '$1' => ${1%${Extension}}png"
+            inkscape -z "$1" $Size -e "${1%${Extension}}png"
+        else
+            echo "File '$1' is not SVG. Ignoring..."
+        fi
+
+        shift
+    done
+fi
+
+exit 0
