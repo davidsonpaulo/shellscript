@@ -2,8 +2,28 @@
 
 MYSQL_DATABASE="opendkim"
 OPENDKIM_DIR="/etc/opendkim"
+EMAIL_DOMAINS="/etc/ssl-email-domains"
+PROCESS="dkim"
+LINODE_CLI_UPDATE_FILE="$(mktemp)"
+
+echo 0 > "$LINODE_CLI_UPDATE_FILE"
+trap "rm -f $LINODE_CLI_UPDATE_FILE" 0 1 2 3 6 15
 
 Mysql="/usr/bin/mysql $MYSQL_DATABASE"
+
+updateLinodeCli() {
+    echo "Updating linodeCli..."
+    pip install -q --upgrade linode-cli
+}
+
+linodeCli() {
+    if [ $(cat "$LINODE_CLI_UPDATE_FILE") -eq 0 ] ; then
+        updateLinodeCli
+        echo 1 > "$LINODE_CLI_UPDATE_FILE"
+    fi
+
+    linode-cli "$@"
+}
 
 getDomainID() {
     $Mysql -B -e "SELECT domain_id FROM domains WHERE domain = '${1}';" |
@@ -33,20 +53,34 @@ listSignings() {
 }
 
 getLinodeDomainID() {
-    linode-cli domains list --domain $1 --pretty --json | 
+    linodeCli domains list --domain $1 --pretty --json | 
     fgrep '"id":' | 
     sed -r 's/[^0-9]//g'
 }
 
 getDNS() {
     LinodeDomainID="$(getLinodeDomainID $1)"
+    Found=0
 
     if [ -n "$LinodeDomainID" ] ; then
-        linode-cli --json --pretty domains records-list $LinodeDomainID |
-        grep '"name": "'$2'._domainkey"' -A 2 | 
-        tail -n 1 | 
-        awk -F ": " '{ print $2 }' |
-        sed -r -e 's/,[[:space:]]*$//' -e 's/^"(.*)"$/\1/'
+        while read Line ; do
+            while read Pair ; do
+                if [ $Found -eq 0 -a -n "$(awk '$1 == "name:" && $2 == "'$2'._domainkey" { print }' <<< "$Pair")" ] ; then
+                    Found=1
+                    continue
+                elif [ $Found -eq 1 -a -n "$(awk '$1 == "target:" { print }' <<< "$Pair")" ] ; then
+                    sed -r 's/^target: //' <<< "$Pair"
+                    break
+                fi
+            done < <(tr ',' '\n' <<< "$Line")
+
+            [ $Found -eq 1 ] && break
+        done < <(
+            linodeCli --json --pretty domains records-list $LinodeDomainID |
+            tr '\n' '\t' |
+            sed -r 's/[\{\}]/\n/g' |
+            xargs -i echo {}
+        )
     fi
 }
 
@@ -54,7 +88,7 @@ getDNSID() {
     LinodeDomainID="$(getLinodeDomainID $1)"
 
     if [ -n "$LinodeDomainID" ] ; then
-        linode-cli --json --pretty domains records-list $LinodeDomainID |
+        linodeCli --json --pretty domains records-list $LinodeDomainID |
         grep '"name": "'$2'._domainkey"' -B 1 |
         head -n 1 |
         sed -r 's/[^0-9]//g'
@@ -62,6 +96,11 @@ getDNSID() {
 }
 
 getDNSEntry() {
+    if [ $EUID -ne 0 ] ; then
+        sudo $0 ${FUNCNAME[0]} "$1" "$2"
+        exit $?
+    fi
+
     EntryFile="${OPENDKIM_DIR}/${1}/${2}.txt"
 
     sed -r -e 's/^.*\( "//' -e 's/ "$//' -e 's/^[[:space:]]+"//' -e 's/" \).+$//' -e 's/rsa-sha256/sha256/' $EntryFile |
@@ -94,12 +133,30 @@ deleteDNS() {
     if [ -n "$DNS" ] ; then
         LinodeDomainID="$(getLinodeDomainID $Domain)"
         DNSID="$(getDNSID "$Domain" "$Key")"
-        linode-cli --json --pretty domains records-delete $LinodeDomainID $DNSID &&
+        linodeCli --json --pretty domains records-delete $LinodeDomainID $DNSID &&
             echo "DNS entry for key '$2' deleted on domain '$1'."
     else
         echo "[ ERROR ] There is not DNS entry for key '$2' on domain '$1'."
         return 1
     fi
+}
+
+getSPF() {
+    Domain="$1"
+    dig @ns1.linode.com +noall +answer ${Domain} txt | 
+        sed -r 's/^[a-z\.]+[[:space:]]+[0-9]+[[:space:]][A-Z[:space:]]+//' 2> /dev/null
+}
+
+getDMARC() {
+    Domain="$1"
+    dig @ns1.linode.com +noall +answer _dmarc.${Domain} txt |
+        sed -r 's/^[a-z_\.]+[[:space:]]+[0-9]+[[:space:]][A-Z[:space:]]+//' 2> /dev/null
+}
+
+getADSP() {
+    Domain="$1"
+    dig @ns1.linode.com +noall +answer _adsp._domainkey.${Domain} txt |
+        sed -r 's/^[a-z_\.]+[[:space:]]+[0-9]+[[:space:]][A-Z[:space:]]+//' 2> /dev/null
 }
 
 addDNS() {
@@ -108,31 +165,59 @@ addDNS() {
     DNS="$(getDNS "$Domain" "$Key")"
     DNSEntry="$(getDNSEntry "$Domain" "$Key")"
 
-    if [ "$DNS" == "$DNSEntry" ] ; then
-        echo "[ ERROR ] DNS entry is already enabled for domain '$Domain' using key '${Key}'."
-        return 1
-    elif [ -n "$DNSEntry" ] ; then
+    if [ -n "$DNSEntry" ] ; then
         LinodeDomainID="$(getLinodeDomainID $Domain)"
 
-        if [ -n "$LinodeDomainID" ] ; then
-            linode-cli --json --pretty domains records-create $LinodeDomainID \
-                --target "$DNSEntry" \
-                --name "${Key}._domainkey" \
-                --type "TXT"
-
-            if [ $? -eq 0 ] ; then
-                echo "DNS entry added for domain '$Domain' using key '$Key'."
-            else
-                echo "[ ERROR ] Failed creating DNS entry for domain '$Domain' using key '$Key'."
-                return 1
-            fi
-        else
+        if [ -z "$LinodeDomainID" ] ; then
             echo "[ ERROR ] Couldn't find the Linode Domain ID for domain '$Domain'."
             return 1
         fi
     else
         echo "[ ERROR ] Couldn't get DNS entry for domain '$Domain' using key '$Key'."
         return 1
+    fi
+
+    if [ "$DNS" == "$DNSEntry" ] ; then
+        echo "DNS entry for key '$Key' is already enabled for domain '$Domain'."
+    else
+        linodeCli --json --pretty domains records-create $LinodeDomainID \
+            --target "$DNSEntry" \
+            --name "${Key}._domainkey" \
+            --type "TXT" &&
+        echo "DNS entry added for domain '$Domain' using key '$Key'." ||
+        echo "[ ERROR ] Failed creating DNS entry for domain '$Domain' using key '$Key'."
+    fi
+
+    if [ -n "$(getSPF "$Domain")" ] ; then
+        echo "SPF record is already enabled for domain '$Domain'."
+    else
+        linodeCli --json --pretty domains records-create $LinodeDomainID \
+            --target "v=spf1 mx -all" \
+            --type "TXT" &&
+        echo "SPF record added for domain '$Domain'." ||
+        echo "[ ERROR ] Failed adding SPF record for domain '$Domain'."
+    fi
+
+    if [ -n "$(getDMARC "$Domain")" ] ; then
+        echo "DMARC record is already enabled for domain '$Domain'."
+    else
+        linodeCli --json --pretty domains records-create $LinodeDomainID \
+            --target "v=DMARC1; p=quarantine; adkim=s; aspf=s" \
+            --name "_dmarc" \
+            --type "TXT" &&
+        echo "DMARC record added for domain '$Domain'." ||
+        echo "[ ERROR ] Failed adding DMARC record for domain '$Domain'."
+    fi
+
+    if [ -n "$(getADSP "$Domain")" ] ; then
+        echo "ADSP record is already enabled for domain '$Domain'."
+    else
+        linodeCli --json --pretty domains records-create $LinodeDomainID \
+            --target "dkim=all" \
+            --name "_adsp._domainkey" \
+            --type "TXT" &&
+        echo "ADSP record added for domain '$Domain'." ||
+        echo "[ ERROR ] Failed adding DMARC record for domain '$Domain'."
     fi
 }
 
@@ -180,6 +265,11 @@ deleteDomain() {
 }
 
 deleteKey() {
+    if [ $EUID -ne 0 ] ; then
+        sudo $0 ${FUNCNAME[0]} "$1" "$2"
+        exit $?
+    fi
+
     KeyName="$1"
     Domain="$2"
     KeyID="$(getKeyID "$1" "$2")"
@@ -199,6 +289,8 @@ deleteKey() {
         rm -f "$KeyFile" "$KeyTXT"
         echo "Key '$1' for domain '$2' deleted from the filesystem."
     fi
+
+    deleteDNS "$Domain" "$KeyName"
 
     if [ $Found -eq 0 ] ; then
         echo "[ ERROR ] Key '$1' does not exist for domain '$2'."
@@ -226,6 +318,11 @@ deleteSigning() {
 }
 
 generateKey() {
+    if [ $EUID -ne 0 ] ; then
+        sudo $0 ${FUNCNAME[0]} "$1"
+        exit $?
+    fi
+
     KeyName="$(date +"%Y%m")"
     Domain="$1"
     DomainDir="${OPENDKIM_DIR}/${Domain}"
@@ -260,7 +357,8 @@ generateKey() {
     fi
 
     if [ -z "$(getDNS "$Domain" "$KeyName")" ] ; then
-        addDNS "$Domain" "$KeyName"
+        addDNS "$Domain" "$KeyName" &&
+            setSigning "$Domain" "$KeyName"
     fi
 }
 
@@ -274,7 +372,39 @@ generateSigningTable() {
     awk '{ print $1 " " $2 "._domainkey." $1 }'
 }
 
+generateAllKeys() {
+    if [ -f $EMAIL_DOMAINS ] ; then
+        while read Domain ; do
+            generateKey $Domain |
+                logger -s -t "${PROCESS}/${FUNCNAME[0]}/${Domain}"
+        done < $EMAIL_DOMAINS
+    else
+        echo "[ ERROR ] Can't read file '$EMAIL_DOMAINS'." |
+            logger -s -t "${PROCESS}/${FUNCNAME[0]}"
+        return 1
+    fi
+}
+
+deleteOldKeys() {
+    CurrentSignings="$(listSignings)"
+    AllKeys="$(listKeys | sed 1d)"
+
+    while read Line ; do
+        Domain="$(awk '{ print $1 }' <<< "$Line")"
+        CurrentKey="$(awk '{ print $2 }' <<< "$Line")"
+
+        while read InvalidKey ; do
+            deleteKey $InvalidKey $Domain
+        done < <(awk '$3 == "'$Domain'" && $2 != "'$CurrentKey'" { print $2 }' <<< "$AllKeys")
+    done < <(listSignings)
+}
+
 updateDKIM() {
+    if [ $EUID -ne 0 ] ; then
+        sudo $0 ${FUNCNAME[0]}
+        exit $?
+    fi
+
     Reload=0
     cd "$OPENDKIM_DIR"
 
@@ -287,7 +417,9 @@ updateDKIM() {
         Reload=1
         echo "Updating ${OPENDKIM_DIR}/key_table..."
         echo "$NewKeyTable" > key_table
-    fi
+    fi |
+    logger -s -t "${PROCESS}/${FUNCNAME[0]}"
+  
 
     NewSigningTable="$(generateSigningTable)"
     SigningTable="$(cat signing_table)"
@@ -298,7 +430,8 @@ updateDKIM() {
         Reload=1
         echo "Updating ${OPENDKIM_DIR}/signing_table..."
         echo "$NewSigningTable" > signing_table
-    fi
+    fi |
+    logger -s -t "${PROCESS}/${FUNCNAME[0]}"
 
     if [ $Reload -eq 1 ] ; then
         echo "Reloding service dkim..."
@@ -306,7 +439,8 @@ updateDKIM() {
         echo "[   OK   ] DKIM configuration has been updated."
     else
         echo "DKIM configuration hasn't been changed."
-    fi
+    fi | 
+    logger -s -t "${PROCESS}/${FUNCNAME[0]}"
 }
 
 
