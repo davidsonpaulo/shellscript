@@ -295,6 +295,9 @@ deleteKey() {
     if [ $Found -eq 0 ] ; then
         echo "[ ERROR ] Key '$1' does not exist for domain '$2'."
         return 1
+    else
+        echo "Reloding service dkim..."
+        service opendkim reload
     fi
 }
 
@@ -434,7 +437,7 @@ updateDKIM() {
     logger -s -t "${PROCESS}/${FUNCNAME[0]}"
 
     if [ $Reload -eq 1 ] ; then
-        echo "Reloding service dkim..."
+        echo "Reloading service dkim..."
         service opendkim reload
         echo "[   OK   ] DKIM configuration has been updated."
     else
