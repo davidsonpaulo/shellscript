@@ -1,8 +1,30 @@
 #!/bin/bash
 
+. ../lib/ffmpeg
+
 if [ -n "$1" ] ; then
-    if [ -f "$1" ] ; then
-        ffmpeg -i "$1" -q:v 1 %05d.jpg
+    if [ "$1" == "--all" ] ; then
+        File="$2"
+    else
+        File="$1"
+    fi
+
+    if [ -f "$File" ] ; then
+        if [ "$1" == "--all" ] ; then
+            ffmpeg -loglevel quiet -i "$1" -q:v 1 %05d.jpg
+        else
+            Frames="$(video-frame-count "$File")"
+            Framerate="$(mediainfo $1 --Output="Video;%FrameRate%" | tr -d '.')"
+            Chunk=$((Frames / 10))
+
+            for i in {0..9} ; do
+                Frame=$((RANDOM % Chunk + i * Chunk))
+                Timestamp=$(frame2Timestamp $Frame $Framerate)
+                echo "=> Generating frame-${1}.jpg..."
+                ffmpeg -loglevel quiet -ss $Timestamp -i "$1" -frames:v 1 -q:v 2 frame-${i}.jpg
+            done
+        fi
+
         exit $?
     else
         echo "File not found: $1"
