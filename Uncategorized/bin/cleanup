@@ -1,0 +1,27 @@
+#!/bin/bash
+
+Dirs=( "/home/davidson/windows/Downloads" )
+
+deleteEmptyDirs() {
+    local dir="$1"
+
+    find "$dir" -mindepth 1 -maxdepth 1 -type d |
+    while read -r d ; do
+        deleteEmptyDirs "$d"
+
+        if [ -z "$(ls -A "$d")" ]; then
+            rmdir -v "$d"
+        fi
+    done
+}
+
+for (( i=0; i<${#Dirs[@]}; i++ )) ; do
+    Dir="${Dirs[$i]}"
+
+    echo "+ Cleaning up directory '$Dir'..."
+    find "$Dir" -type f -atime +30 | xargs -i rm -v "{}"
+    find "$Dir" -type f -mtime +90 | xargs -i rm -v "{}"
+    deleteEmptyDirs "$Dir"
+done
+
+exit 0
