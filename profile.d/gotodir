@@ -1,0 +1,22 @@
+#!/bin/bash
+#
+# gotodir
+# Access the real parent directory of a given file/directory
+
+function gotodir() {
+    if [ -n "$1" ] ; then
+        Input="$1"
+    else
+        Input="$PWD"
+    fi
+
+    RealPath="$(realpath "$Input")"
+
+    echo "=> Real path: '$RealPath'"
+
+    ParentDir="$(dirname "$RealPath")"
+
+    echo "=> Parent directory: '$ParentDir'"
+
+    cd "$ParentDir"
+}
