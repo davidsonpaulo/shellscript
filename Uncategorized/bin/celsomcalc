@@ -1,71 +1,13 @@
 #!/usr/bin/env python3
 
 from math import floor, ceil, sqrt
-import argparse
 import sys
 
-a = 980 / 891
-b = 262 / 81
-c = 593 / 891
+A = 980 / 891
+B = 262 / 81
+C = 593 / 891
 
-Taxas = {
-        'dinheiro' : 0,
-        'debito' : 0.88,
-        '1x' : 3.78,
-        '2x' : 2.7 + 2.18,
-        '3x' : 2.7 + 2.88,
-        '4x' : 2.7 + 3.6,
-        '5x' : 2.7 + 4.29,
-        '6x' : 2.7 + 4.98,
-        '7x' : 2.9 + 5.67,
-        '8x' : 2.9 + 6.34,
-        '9x' : 2.9 + 7.01,
-        '10x' : 2.9 + 7.68
-        }
-
-def addFee(price, fee):
-    return price * (1 + fee / 100)
-
-def addTaxa(price, taxa):
-    return price / (1 - Taxas[taxa] / 100)
-
-def getCashPrice(price, taxa):
-    return price * (1 - Taxas[taxa] / 100)
-
-def roundPrice(price):
-    (floored, ceiled) = (floor(price), ceil(price))
-
-    return ceiled if price - floored > ceiled - price else floored
-
-def chooseInstallments(margin):
-    return min(10, roundPrice(23.5 - 0.45 * margin));
-
-def addFee(fee, price):
-    return price * (1 + fee / 100)
-
-def upfrontInstallment(price, number_of_installments):
-    installment = price / (1 + (number_of_installments - 1) * (1 - Taxas[f"{number_of_installments - 1}x"] / 100))
-    total = installment * number_of_installments
-    return (installment, total)
-
-def priceStandard(cost, quantity = 1):
-    final_cost = cost * quantity
-
-    return a * final_cost + b * sqrt(final_cost) + c;
-
-def pricePeca(cost, restock):
-    price1 = priceStandard(cost)
-    price2 = priceStandard(restock)
-    average = (price1 + price2) / 2
-
-    return addTaxa( 2 * restock - average if average < restock else average, '1x' )
-
-def priceMaquina(cost, restock):
-    return addTaxa((cost + restock) / 2, '10x')
-
-import sys
-
-Taxas = {
+TAXAS = {
     'dinheiro': 0,
     'debito': 0.88,
     '1x': 3.78,
@@ -80,76 +22,114 @@ Taxas = {
     '10x': 2.9 + 7.68
 }
 
-if __name__ == "__main__":
-    valid_options = ('peca', 'maquina', 'parcelamento')
+def add_fee(price, fee):
+    return price * (1 + fee / 100)
 
-    # Get arguments from sys.argv
-    args = sys.argv[1:]  # Skip the script name
+def add_taxa(price, taxa):
+    return price / (1 - TAXAS[taxa] / 100)
 
-    if not args:
-        print("Uso: celsomcalc <tipo> [<args>]")
-        sys.exit(1)
+def get_cash_price(price, taxa):
+    return price * (1 - TAXAS[taxa] / 100)
+
+def round_price(price):
+    floored, ceiled = floor(price), ceil(price)
+    return ceiled if price - floored > ceiled - price else floored
+
+def upfront_installment(price, number_of_installments):
+    installment = price / (1 + (number_of_installments - 1) * (1 - TAXAS[f"{number_of_installments - 1}x"] / 100))
+    total = installment * number_of_installments
+    return installment, total
+
+def price_standard(cost, quantity=1):
+    final_cost = cost * quantity
+    return A * final_cost + B * sqrt(final_cost) + C
+
+def price_peca(cost, restock):
+    price1 = price_standard(cost)
+    price2 = price_standard(restock)
+    average = (price1 + price2) / 2
+    return add_taxa(2 * restock - average if average < restock else average, '1x')
+
+def price_maquina(cost, restock):
+    return add_taxa((cost + restock) / 2, '10x')
+
+def print_help():
+    print("ERRO: comando inválido. Opções:")
+    print("peca <preço custo> <preço reposição>")
+    print("maquina <preço custo> <preço reposição>")
+    print("parcelamento <preço> <parcelas>")
+    print("exit")
+
+def process_command(args):
+    if len(args) == 0:
+        return
 
     tipo = args[0]
 
     if tipo in ('peca', 'maquina'):
         if len(args) != 3:
-            print("Uso: celsomcalc peca|maquina <custo> <reposicao>")
-            sys.exit(1)
-
+            print_help()
+            return
         try:
             custo = float(args[1])
             reposicao = float(args[2])
         except ValueError:
             print("Custo e reposição devem ser números.")
-            sys.exit(1)
+            return
     elif tipo == 'parcelamento':
         if len(args) != 3:
-            print("Uso: celsomcalc parcelamento <preco> <parcelas>")
-            sys.exit(1)
-
+            print_help()
+            return
         try:
             preco = float(args[1])
-            parcela = args[2]  # Assume parcelas are strings like '10x'
+            parcela = args[2]
         except ValueError:
             print("Preço deve ser um número.")
-            sys.exit(1)
+            return
 
         if preco <= 0:
             print("O preço deve ser maior que zero.")
-            sys.exit(1)
+            return
 
-        if parcela not in Taxas:
-            print(f"Parcela inválida: '{parcela}'. Opções: {', '.join(Taxas.keys())}")
-            sys.exit(1)
+        if parcela not in TAXAS:
+            print(f"Parcela inválida: '{parcela}'. Opções: {', '.join(TAXAS.keys())}")
+            return
     else:
-        print(f"Opção inválida: '{tipo}'. Opções: {', '.join(valid_options)}")
-        sys.exit(1)
+        print_help()
+        return
 
     if tipo == 'peca':
-        venda = roundPrice( pricePeca(custo, reposicao) )
+        venda = round_price(price_peca(custo, reposicao))
         print(f"Preço de venda: R$ {venda:.2f}")
     elif tipo == 'maquina':
-        venda = roundPrice( priceMaquina(custo, reposicao) )
+        venda = round_price(price_maquina(custo, reposicao))
         print(f"Preço de venda: R$ {venda:.2f}")
     elif tipo == 'parcelamento':
-        com_entrada = ''
-        preco_a_vista = getCashPrice(preco, parcela)
-
-        for taxa in Taxas:
-            preco = addTaxa(preco_a_vista, taxa)
-            sem_entrada = f"{taxa}"
-
+        preco_a_vista = get_cash_price(preco, parcela)
+        for taxa, valor_taxa in TAXAS.items():
+            preco_final = add_taxa(preco_a_vista, taxa)
             if taxa[0].isdigit():
-                number_of_installments = int(''.join([x for x in taxa if x.isdigit()]))
-                sem_entrada = f"{sem_entrada} {preco / number_of_installments:.2f}"
-
+                number_of_installments = int(''.join(filter(str.isdigit, taxa)))
+                sem_entrada = f"{taxa} {preco_final / number_of_installments:.2f} (R$ {preco_final:.2f})"
                 if number_of_installments > 1:
-                    sem_entrada = f"{sem_entrada} (R$ {preco:.2f})"
-                    (valor_parcela, valor_total) = upfrontInstallment(preco_a_vista, number_of_installments)
+                    valor_parcela, valor_total = upfront_installment(preco_a_vista, number_of_installments)
                     com_entrada = f" | 1+{number_of_installments - 1}x R$ {valor_parcela:.2f} (R$ {valor_total:.2f})"
+                    print(f"{sem_entrada}{com_entrada}")
             else:
-                sem_entrada = f"{sem_entrada}: R$ {preco:.2f}"
+                print(f"{taxa}: R$ {preco_final:.2f}")
 
-            print(f"{sem_entrada}{com_entrada}")
+if __name__ == "__main__":
+    print("Bem-vindo ao calculador. Digite um comando (ou 'exit' para sair):")
 
+    while True:
+        try:
+            user_input = input("> ").strip()  # Wait for user input
+        except EOFError:
+            break  # Handle Ctrl+D for exit
+
+        if user_input.lower() == 'exit':
+            print("Encerrando o programa.")
+            break
+
+        args = user_input.split()
+        process_command(args)
