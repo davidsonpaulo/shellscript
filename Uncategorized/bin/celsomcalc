@@ -119,6 +119,13 @@ def process_command(args):
                 print(f"{taxa}: R$ {preco_final:.2f}")
 
 if __name__ == "__main__":
+    # Check if arguments are passed
+    if len(sys.argv) > 1:
+        # Process the arguments directly if any are provided
+        process_command(sys.argv[1:])
+        sys.exit(0)  # Exit after processing the command-line arguments
+
+    # Interactive mode if no arguments are passed
     print("Bem-vindo ao calculador. Digite um comando (ou 'exit' para sair):")
 
     while True:
