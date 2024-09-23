@@ -7,6 +7,9 @@ A = 980 / 891
 B = 262 / 81
 C = 593 / 891
 
+CARGA_OPERACIONAL = 43.76
+DEWALT_FEE = 3
+
 TAXAS = {
     'dinheiro': 0,
     'debito': 0.88,
@@ -56,6 +59,7 @@ def price_maquina(cost, restock):
 def print_help():
     print("ERRO: comando inválido. Opções:")
     print("peca <preço custo> <preço reposição>")
+    print("peca-dewalt <preço custo> <ipi>")
     print("maquina <preço custo> <preço reposição>")
     print("parcelamento <preço> <parcelas>")
     print("exit")
@@ -66,16 +70,40 @@ def process_command(args):
 
     tipo = args[0]
 
-    if tipo in ('peca', 'maquina'):
+    if tipo in ('peca', 'peca-dewalt', 'maquina'):
         if len(args) != 3:
             print_help()
             return
         try:
             custo = float(args[1])
-            reposicao = float(args[2])
+
+            if tipo == 'peca-dewalt':
+                print("PEÇA DEWALT")
+                ipi = float(args[2])
+                custo = custo * (1 + DEWALT_FEE / 100)
+                custo_nota = custo * (1 + ipi / 100)
+                reposicao = custo_nota * (1 + CARGA_OPERACIONAL / 100)
+            else:
+                reposicao = float(args[2])
+
+                # If reposicao is 0, calculate it based on CARGA_OPERACIONAL
+                if reposicao == 0:
+                    reposicao = custo * (1 + CARGA_OPERACIONAL / 100)
         except ValueError:
             print("Custo e reposição devem ser números.")
             return
+
+        if tipo in ( 'peca', 'peca-dewalt' ):
+            venda = round_price(price_peca(custo, reposicao))
+
+            if tipo == 'peca-dewalt':
+                print(f"Custo de Fábrica: R$ {custo:.3f} | Custo nota: R$ {custo_nota:.3f} | Custo reposição: R$ {reposicao:.3f}")
+
+            print(f"Preço de venda: R$ {venda:.2f}")
+        elif tipo == 'maquina':
+            venda = round_price(price_maquina(custo, reposicao))
+            print(f"Preço de venda: R$ {venda:.2f}")
+
     elif tipo == 'parcelamento':
         if len(args) != 3:
             print_help()
