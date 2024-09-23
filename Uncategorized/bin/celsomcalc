@@ -94,28 +94,25 @@ def process_command(args):
         if parcela not in TAXAS:
             print(f"Parcela inválida: '{parcela}'. Opções: {', '.join(TAXAS.keys())}")
             return
-    else:
-        print_help()
-        return
 
-    if tipo == 'peca':
-        venda = round_price(price_peca(custo, reposicao))
-        print(f"Preço de venda: R$ {venda:.2f}")
-    elif tipo == 'maquina':
-        venda = round_price(price_maquina(custo, reposicao))
-        print(f"Preço de venda: R$ {venda:.2f}")
-    elif tipo == 'parcelamento':
+        # Handle parcelamento
         preco_a_vista = get_cash_price(preco, parcela)
         for taxa, valor_taxa in TAXAS.items():
             preco_final = add_taxa(preco_a_vista, taxa)
+
             if taxa[0].isdigit():
                 number_of_installments = int(''.join(filter(str.isdigit, taxa)))
-                sem_entrada = f"{taxa} {preco_final / number_of_installments:.2f} (R$ {preco_final:.2f})"
-                if number_of_installments > 1:
+
+                if number_of_installments == 1:
+                    # Special case for 1x (one-time payment)
+                    print(f"{taxa}: R$ {preco_final:.2f}")
+                else:
+                    sem_entrada = f"{taxa} {preco_final / number_of_installments:.2f} (R$ {preco_final:.2f})"
                     valor_parcela, valor_total = upfront_installment(preco_a_vista, number_of_installments)
                     com_entrada = f" | 1+{number_of_installments - 1}x R$ {valor_parcela:.2f} (R$ {valor_total:.2f})"
                     print(f"{sem_entrada}{com_entrada}")
             else:
+                # For non-digit-based options like 'debito' and 'dinheiro'
                 print(f"{taxa}: R$ {preco_final:.2f}")
 
 if __name__ == "__main__":
