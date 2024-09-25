@@ -60,6 +60,7 @@ def print_help():
     print("ERRO: comando inválido. Opções:")
     print("peca <preço custo> <preço reposição>")
     print("peca-dewalt <preço custo> <ipi>")
+    print("ipi <preço custo> <ipi>")
     print("maquina <preço custo> <preço reposição>")
     print("parcelamento <preço> <parcelas>")
     print("exit")
@@ -70,17 +71,23 @@ def process_command(args):
 
     tipo = args[0]
 
-    if tipo in ('peca', 'peca-dewalt', 'maquina'):
+    if tipo in ('help', 'ajuda'):
+        print_help()
+        return
+
+    if tipo in ('peca', 'peca-dewalt', 'maquina', 'ipi'):
         if len(args) != 3:
             print_help()
             return
         try:
             custo = float(args[1])
 
-            if tipo == 'peca-dewalt':
-                print("PEÇA DEWALT")
+            if tipo in ('ipi', 'peca-dewalt'):
                 ipi = float(args[2])
-                custo = custo * (1 + DEWALT_FEE / 100)
+
+                if tipo == 'peca-dewalt':
+                    custo = custo * (1 + DEWALT_FEE / 100)
+
                 custo_nota = custo * (1 + ipi / 100)
                 reposicao = custo_nota * (1 + CARGA_OPERACIONAL / 100)
             else:
@@ -93,16 +100,18 @@ def process_command(args):
             print("Custo e reposição devem ser números.")
             return
 
-        if tipo in ( 'peca', 'peca-dewalt' ):
+        if tipo in ( 'ipi', 'peca', 'peca-dewalt' ):
             venda = round_price(price_peca(custo, reposicao))
 
-            if tipo == 'peca-dewalt':
+            if tipo in ('ipi', 'peca-dewalt'):
                 print(f"Custo de Fábrica: R$ {custo:.3f} | Custo nota: R$ {custo_nota:.3f} | Custo reposição: R$ {reposicao:.3f}")
 
             print(f"Preço de venda: R$ {venda:.2f}")
         elif tipo == 'maquina':
             venda = round_price(price_maquina(custo, reposicao))
             print(f"Preço de venda: R$ {venda:.2f}")
+        elif tipo == 'ipi':
+            custo_nota = custo
 
     elif tipo == 'parcelamento':
         if len(args) != 3:
