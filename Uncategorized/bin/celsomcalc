@@ -83,12 +83,13 @@ def process_command(args):
             custo = float(args[1])
 
             if tipo in ('ipi', 'peca-dewalt'):
-                ipi = float(args[2])
+                is_percentage = args[2][-1] == "%"
+                ipi = float(args[2]) if not is_percentage else float(args[2][:-1])
 
                 if tipo == 'peca-dewalt':
                     custo = custo * (1 + DEWALT_FEE / 100)
 
-                custo_nota = custo * (1 + ipi / 100)
+                custo_nota = custo * (1 + ipi / 100) if is_percentage else ipi
                 reposicao = custo_nota * (1 + CARGA_OPERACIONAL / 100)
             else:
                 reposicao = float(args[2])
