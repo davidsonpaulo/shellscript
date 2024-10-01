@@ -105,12 +105,12 @@ def process_command(args):
             venda = round_price(price_peca(custo, reposicao))
 
             if tipo in ('ipi', 'peca-dewalt'):
-                print(f"Custo de Fábrica: R$ {custo:.3f} | Custo nota: R$ {custo_nota:.3f} | Custo reposição: R$ {reposicao:.3f}")
+                print(f"- Custo de Fábrica:\tR$ {custo:.3f}\n- Custo nota:\t\tR$ {custo_nota:.3f}\n- Custo reposição:\tR$ {reposicao:.3f}\n")
 
-            print(f"Preço de venda: R$ {venda:.2f}")
+            print(f"Preço de venda:\t\tR$ {venda:.2f}")
         elif tipo == 'maquina':
             venda = round_price(price_maquina(custo, reposicao))
-            print(f"Preço de venda: R$ {venda:.2f}")
+            print(f"Preço de venda:\t\tR$ {venda:.2f}")
         elif tipo == 'ipi':
             custo_nota = custo
 
@@ -174,4 +174,6 @@ if __name__ == "__main__":
             break
 
         args = user_input.split()
+        print()
         process_command(args)
+        print()
