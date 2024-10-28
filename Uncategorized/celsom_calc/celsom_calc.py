@@ -4,30 +4,6 @@ from math import floor, ceil, sqrt
 import sys
 import json
 
-"""
-A = 980 / 891
-B = 262 / 81
-C = 593 / 891
-
-CARGA_OPERACIONAL = 43.76
-DEWALT_FEE = 3
-
-TAXAS = {
-    'dinheiro': 0,
-    'debito': 0.88,
-    '1x': 3.78,
-    '2x': 2.7 + 2.18,
-    '3x': 2.7 + 2.88,
-    '4x': 2.7 + 3.6,
-    '5x': 2.7 + 4.29,
-    '6x': 2.7 + 4.98,
-    '7x': 2.9 + 5.67,
-    '8x': 2.9 + 6.34,
-    '9x': 2.9 + 7.01,
-    '10x': 2.9 + 7.68
-}
-"""
-
 def load_constants(file_path):
     constants = {}
     with open(file_path, 'r') as f:
@@ -74,82 +50,120 @@ def price_peca(cost, restock):
 def price_maquina(cost, restock):
     return add_taxa((cost + restock) / 2, '10x')
 
-def print_help():
-    print("ERRO: comando inválido. Opções:")
-    print("peca <preço custo> <preço reposição>")
-    print("peca-dewalt <preço custo> <ipi>")
-    print("ipi <preço custo> <ipi>")
-    print("maquina <preço custo> <preço reposição>")
-    print("parcelamento <preço> <parcelas>")
-    print("exit")
+def print_help(error = True):
+    if error:
+        print("ERRO: comando inválido. Opções:")
 
-def process_command(args):
+    print("peca <custo de fábrica> <custo reposição>")
+    print("peca-dewalt <custo sem impostos> <custo com impostos / ipi%>")
+    print("maquina <custo de fábrica> <custo reposição>")
+    print("parcelamento <preço> <parcelas>")
+    print("os <lucro total> <% lucro>")
+    print("ajuda / help")
+    print("sair / exit")
+
+def get_tipo(tipo, tipos_validos):
+    matched = [t for t in tipos_validos if t.startswith(tipo)]
+
+    if len(matched) == 1:
+        return matched[0]
+    else:
+        return tipo
+
+def process_command(args, tipo = None):
     if len(args) == 0:
         return
 
-    tipo = args[0]
+    args0 = get_tipo(args[0], tipos_validos)
 
-    if tipo in ('help', 'ajuda'):
+    if tipo and args0 not in tipos_validos:
+        args = [tipo] + args
+    elif args0 in tipos_validos:
+        tipo = args0
+    else:
         print_help()
         return
 
-    if tipo in ('peca', 'peca-dewalt', 'maquina', 'ipi'):
+    if tipo in ( 'sair', 'exit' ):
+        print("Encerrando o programa.")
+        sys.exit(0)
+
+    if tipo in ('help', 'ajuda'):
+        print_help(False)
+        return
+
+    if tipo in ('peca', 'peca-dewalt', 'maquina'):
         if len(args) != 3:
             print_help()
-            return
+            return tipo
         try:
             custo = float(args[1])
 
-            if tipo in ('ipi', 'peca-dewalt'):
-                is_percentage = args[2][-1] == "%"
-                ipi = float(args[2]) if not is_percentage else float(args[2][:-1])
+            if tipo == 'peca-dewalt':
+                custo = custo * (1 + DEWALT_FEE / 100)
 
-                if tipo == 'peca-dewalt':
-                    custo = custo * (1 + DEWALT_FEE / 100)
+            is_percentage = args[2][-1] == "%"
 
-                custo_nota = custo * (1 + ipi / 100) if is_percentage else ipi
+            if is_percentage:
+                ipi = float(args[2][:-1])
+                custo_nota = custo * (1 + ipi / 100)
+            else:
+                custo_nota = float(args[2])
+
+            if custo_nota < custo * (1 + CARGA_OPERACIONAL / 100):
                 reposicao = custo_nota * (1 + CARGA_OPERACIONAL / 100)
             else:
-                reposicao = float(args[2])
-
-                # If reposicao is 0, calculate it based on CARGA_OPERACIONAL
-                if reposicao == 0:
-                    reposicao = custo * (1 + CARGA_OPERACIONAL / 100)
+                reposicao = custo_nota
+                custo_nota = reposicao / (1 + CARGA_OPERACIONAL / 100)
         except ValueError:
             print("Custo e reposição devem ser números.")
-            return
+            return tipo
 
-        if tipo in ( 'ipi', 'peca', 'peca-dewalt' ):
+        if tipo in ( 'peca', 'peca-dewalt' ):
             venda = round_price(price_peca(custo, reposicao))
 
-            if tipo in ('ipi', 'peca-dewalt'):
-                print(f"- Custo de Fábrica:\tR$ {custo:.3f}\n- Custo nota:\t\tR$ {custo_nota:.3f}\n- Custo reposição:\tR$ {reposicao:.3f}\n")
-
+            print(f"- Custo de Fábrica:\tR$ {custo:.3f}\n- Custo nota:\t\tR$ {custo_nota:.3f}\n- Custo reposição:\tR$ {reposicao:.3f}\n")
             print(f"Preço de venda:\t\tR$ {venda:.2f}")
         elif tipo == 'maquina':
             venda = round_price(price_maquina(custo, reposicao))
+            print(f"- Custo de Fábrica:\tR$ {custo:.3f}\n- Custo nota:\t\tR$ {custo_nota:.3f}\n- Custo reposição:\tR$ {reposicao:.3f}\n")
             print(f"Preço de venda:\t\tR$ {venda:.2f}")
-        elif tipo == 'ipi':
-            custo_nota = custo
+    elif tipo == 'os':
+        if len(args) != 3:
+            print_help()
+            return tipo
+        try:
+            lucro = float(args[1])
+            margem = float(args[2])
+        except ValueError:
+            print("Preço e margem devem ser números.")
+            return tipo
 
+        if lucro < 0 or margem < 0:
+            print("Preço e margem devem ser maiores que zero.")
+            return tipo
+
+        desconto = round_price(0.15 * (margem / 100) * lucro)
+
+        print(f"Desconto: R$ {desconto:.2f}")
     elif tipo == 'parcelamento':
         if len(args) != 3:
             print_help()
-            return
+            return tipo
         try:
             preco = float(args[1])
             parcela = args[2]
         except ValueError:
             print("Preço deve ser um número.")
-            return
+            return tipo
 
         if preco <= 0:
             print("O preço deve ser maior que zero.")
-            return
+            return tipo
 
         if parcela not in TAXAS:
             print(f"Parcela inválida: '{parcela}'. Opções: {', '.join(TAXAS.keys())}")
-            return
+            return tipo
 
         # Handle parcelamento
         preco_a_vista = get_cash_price(preco, parcela)
@@ -171,6 +185,8 @@ def process_command(args):
                 # For non-digit-based options like 'debito' and 'dinheiro'
                 print(f"{taxa}: R$ {preco_final:.2f}")
 
+    return tipo
+
 if __name__ == "__main__":
     # Load the constants
     constants = load_constants('vars.txt')
@@ -189,19 +205,18 @@ if __name__ == "__main__":
         sys.exit(0)  # Exit after processing the command-line arguments
 
     # Interactive mode if no arguments are passed
-    print("Bem-vindo ao calculador. Digite um comando (ou 'exit' para sair):")
+    print("Bem-vindo ao calculador. Digite um comando (ou 'sair' para sair):")
+
+    tipos_validos = ( 'peca', 'peca-dewalt', 'maquina', 'parcelamento', 'os', 'sair', 'exit', 'ajuda', 'help' )
+    tipo = None
 
     while True:
         try:
-            user_input = input("> ").strip()  # Wait for user input
+            user_input = input(f"{tipo if tipo else ''}> ").strip()  # Wait for user input
         except EOFError:
             break  # Handle Ctrl+D for exit
 
-        if user_input.lower() == 'exit':
-            print("Encerrando o programa.")
-            break
-
         args = user_input.split()
         print()
-        process_command(args)
+        tipo = process_command(args, tipo)
         print()

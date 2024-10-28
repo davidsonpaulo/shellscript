@@ -14,9 +14,13 @@ function gotodir() {
 
     echo "=> Real path: '$RealPath'"
 
-    ParentDir="$(dirname "$RealPath")"
+    if [ -d "$RealPath" ] ; then
+        cd "$RealPath"
+    else
+        ParentDir="$(dirname "$RealPath")"
 
-    echo "=> Parent directory: '$ParentDir'"
+        echo "=> Parent directory: '$ParentDir'"
 
-    cd "$ParentDir"
+        cd "$ParentDir"
+    fi
 }
