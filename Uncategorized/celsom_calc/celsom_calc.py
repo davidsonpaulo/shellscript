@@ -110,7 +110,7 @@ def process_command(args, tipo = None):
             else:
                 custo_nota = float(args[2])
 
-            if custo_nota < custo * (1 + CARGA_OPERACIONAL / 100):
+            if custo_nota < custo * (1 + (CARGA_OPERACIONAL - 0.01) / 100):
                 reposicao = custo_nota * (1 + CARGA_OPERACIONAL / 100)
             else:
                 reposicao = custo_nota
