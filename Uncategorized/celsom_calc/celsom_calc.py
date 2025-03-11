@@ -47,8 +47,8 @@ def price_peca(cost, restock):
     average = (price1 + price2) / 2
     return add_taxa(2 * restock - average if average < restock else average, '1x')
 
-def price_maquina(cost, restock):
-    return add_taxa((cost + restock) / 2, '10x')
+def price_maquina(factory, invoice, restock):
+    return add_taxa((factory + invoice + restock) / 3, '10x')
 
 def print_help(error = True):
     if error:
@@ -69,6 +69,28 @@ def get_tipo(tipo, tipos_validos):
         return matched[0]
     else:
         return tipo
+
+def add_minimum_unit(num):
+    # Convert to string to easily inspect decimal places
+    num_str = str(num)
+
+    # Check if the number is integer or float
+    if '.' in num_str:
+        # Find the position of the decimal point
+        decimal_pos = num_str.index('.')
+        # Check for trailing zeros after the decimal
+        decimal_places = 0 if num_str.endswith('.0') else len(num_str) - decimal_pos - 1
+
+        # If number ends in .0, treat as integer
+        if decimal_places == 0:
+            return num + 1
+
+        # Calculate the smallest unit based on decimal places
+        unit = 10 ** -decimal_places
+        return num + unit
+    else:
+        # If it's an integer, just add 1
+        return num + 1
 
 def process_command(args, tipo = None):
     if len(args) == 0:
@@ -110,11 +132,15 @@ def process_command(args, tipo = None):
             else:
                 custo_nota = float(args[2])
 
-            if custo_nota < custo * (1 + (CARGA_OPERACIONAL - 0.01) / 100):
+            if add_minimum_unit(custo_nota) < custo * (1 + CARGA_OPERACIONAL / 100):
                 reposicao = custo_nota * (1 + CARGA_OPERACIONAL / 100)
             else:
                 reposicao = custo_nota
                 custo_nota = reposicao / (1 + CARGA_OPERACIONAL / 100)
+
+                if custo_nota < custo:
+                    custo_nota = custo
+
         except ValueError:
             print("Custo e reposição devem ser números.")
             return tipo
@@ -125,7 +151,7 @@ def process_command(args, tipo = None):
             print(f"- Custo de Fábrica:\tR$ {custo:.3f}\n- Custo nota:\t\tR$ {custo_nota:.3f}\n- Custo reposição:\tR$ {reposicao:.3f}\n")
             print(f"Preço de venda:\t\tR$ {venda:.2f}")
         elif tipo == 'maquina':
-            venda = round_price(price_maquina(custo, reposicao))
+            venda = round_price(price_maquina(custo, custo_nota, reposicao))
             print(f"- Custo de Fábrica:\tR$ {custo:.3f}\n- Custo nota:\t\tR$ {custo_nota:.3f}\n- Custo reposição:\tR$ {reposicao:.3f}\n")
             print(f"Preço de venda:\t\tR$ {venda:.2f}")
     elif tipo == 'os':
@@ -212,7 +238,7 @@ if __name__ == "__main__":
 
     while True:
         try:
-            user_input = input(f"{tipo if tipo else ''}> ").strip()  # Wait for user input
+            user_input = input(f"{tipo if tipo else ''}> ").strip().lower()  # Wait for user input
         except EOFError:
             break  # Handle Ctrl+D for exit
 
