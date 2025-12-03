@@ -1,184 +1,265 @@
 #!/usr/bin/env python3
-
 from math import floor, ceil, sqrt
 import sys
 import json
 
-def load_constants(file_path):
-    constants = {}
-    with open(file_path, 'r') as f:
-        for line in f:
-            # Skip empty lines and comments
-            if line.strip() and not line.startswith('#'):
-                key, value = line.split('=')
-                constants[key.strip()] = float(value.strip())
-    return constants
+def carregar_constantes(caminho_arquivo):
+    constantes = {}
+    with open(caminho_arquivo, 'r') as f:
+        for linha in f:
+            # Ignora linhas vazias e comentários
+            if linha.strip() and not linha.startswith('#'):
+                chave, valor = linha.split('=')
+                constantes[chave.strip()] = float(valor.strip())
+    return constantes
 
-def load_taxas(file_path):
-    with open(file_path, 'r') as f:
+def carregar_taxas(caminho_arquivo):
+    with open(caminho_arquivo, 'r') as f:
         taxas = json.load(f)
     return taxas
 
-def add_fee(price, fee):
-    return price * (1 + fee / 100)
+def adicionar_taxa(preco, chave_taxa):
+    return preco / (1 - TAXAS[chave_taxa] / 100)
 
-def add_taxa(price, taxa):
-    return price / (1 - TAXAS[taxa] / 100)
+def remover_taxa(preco, chave_taxa):
+    return preco * (1 - TAXAS[chave_taxa] / 100)
 
-def get_cash_price(price, taxa):
-    return price * (1 - TAXAS[taxa] / 100)
+def arredondar_preco(preco):
+    piso = floor(preco)
+    teto = ceil(preco)
+    return teto if preco - piso >= teto - preco else piso
 
-def round_price(price):
-    floored, ceiled = floor(price), ceil(price)
-    return ceiled if price - floored > ceiled - price else floored
+def calcular_parcela_com_entrada(preco, numero_parcelas):
+    parcela = preco / (1 + (numero_parcelas - 1) * (1 - TAXAS[f"{numero_parcelas - 1}x"] / 100))
+    total = parcela * numero_parcelas
+    return parcela, total
 
-def upfront_installment(price, number_of_installments):
-    installment = price / (1 + (number_of_installments - 1) * (1 - TAXAS[f"{number_of_installments - 1}x"] / 100))
-    total = installment * number_of_installments
-    return installment, total
+def calcular_preco_padrao(custo, quantidade=1):
+    custo_final = custo * quantidade
+    return A * custo_final + B * sqrt(custo_final) + C
 
-def price_standard(cost, quantity=1):
-    final_cost = cost * quantity
-    return A * final_cost + B * sqrt(final_cost) + C
+def calcular_preco_peca(custo, reposicao):
+    preco_minimo = calcular_preco_padrao(custo)
+    preco_maximo = calcular_preco_padrao(reposicao)
+    preco_medio = (preco_minimo + preco_maximo) / 2
+    if preco_medio < reposicao:
+        preco = 2 * reposicao - preco_medio
+    else:
+        preco = preco_medio
+    return adicionar_taxa(preco, '1x')
 
-def price_peca(cost, restock):
-    price1 = price_standard(cost)
-    price2 = price_standard(restock)
-    average = (price1 + price2) / 2
-    return add_taxa(2 * restock - average if average < restock else average, '1x')
+def calcular_preco_maquina(custo_fabrica, custo_nota, reposicao):
+    venda_normal = ceil(adicionar_taxa((2 * custo_nota + reposicao) / 3, '10x'))
+    lucro_normal = venda_normal - custo_nota
 
-def price_maquina(factory, invoice, restock):
-    return add_taxa((factory + invoice + restock) / 3, '10x')
+    if custo_nota > custo_fabrica:
+        venda_desconto = custo_fabrica + lucro_normal
+        diferenca_precos = venda_normal - venda_desconto
+        preco_venda = ceil(venda_desconto + diferenca_precos / 2)
+        preco_venda_vista = ceil(remover_taxa(preco_venda, '1x'))
 
-def print_help(error = True):
-    if error:
+        return(venda_normal, True, preco_venda, preco_venda_vista)
+
+    venda_normal_vista = ceil(remover_taxa(venda_normal, '1x'))
+
+    return(venda_normal, False, 0, venda_normal_vista)
+
+def calcular_preco_acessorio(custo_fabrica, custo_nota, reposicao):
+    preco_maquina, *_ = calcular_preco_maquina(custo_fabrica, custo_nota, reposicao)
+    preco_peca = calcular_preco_peca(custo_nota, reposicao)
+    return sqrt(preco_maquina * preco_peca)
+
+def preco_maquina(custo_fabrica, custo_nota, reposicao):
+    preco_normal, desconto, preco_a_prazo, preco_a_vista  = calcular_preco_maquina(custo_fabrica, custo_nota, reposicao)
+
+    if desconto:
+        print(f"Preço normal: R$ {preco_normal}")
+        print(f"PROMOÇÃO: R$ {preco_a_prazo} em até 10x no cartão, R$ {preco_a_vista} à vista")
+    else:
+        print(f"R$ {preco_normal} em até 10x no cartão")
+        print(f"R$ {preco_a_vista} à vista")
+
+def preco_acessorio(custo_fabrica, custo_nota, reposicao):
+    preco = calcular_preco_acessorio(custo_fabrica, custo_nota, reposicao)
+    
+    print(f"Preço: R$ {preco:.2f}")
+
+def calcular_preco_dewalt(minimo_anunciado):
+    preco_vista = remover_taxa(minimo_anunciado, "1x")
+    preco_venda = adicionar_taxa(preco_vista, "6x")
+    bonus = minimo_anunciado - preco_vista
+    return ceil(preco_venda), floor(bonus)
+
+def imprimir_custos(custo_fabrica, custo_nota, reposicao):
+    print(f"- Custo de Fábrica:\tR$ {custo_fabrica:.3f}\n- Custo nota:\t\tR$ {custo_nota:.3f}\n- Custo reposição:\tR$ {reposicao:.3f}\n")
+
+def imprimir_ajuda(erro=True):
+    if erro:
         print("ERRO: comando inválido. Opções:")
-
-    print("peca <custo de fábrica> <custo reposição>")
-    print("peca-dewalt <custo sem impostos> <custo com impostos / ipi%>")
-    print("maquina <custo de fábrica> <custo reposição>")
+    print("peca [<custo fabrica>] <custo nota> | <custo fabrica> <ipi>%")
+    print("maquina [<custo fabrica>] <custo nota> | <custo fabrica> <ipi>% | <custo com desconto> <custo sem desconto>")
+    print("acessorio [<custo fabrica>] <custo nota> | <custo fabrica> <ipi>%")
+    print("dewalt <mínimo anunciado>")
+    print("vonder <preço normal>, <preço sem impostos>, <preco com impostos>")
     print("parcelamento <preço> <parcelas>")
-    print("os <lucro total> <% lucro>")
+    print("os <preço bruto>")
     print("ajuda / help")
     print("sair / exit")
 
-def get_tipo(tipo, tipos_validos):
-    matched = [t for t in tipos_validos if t.startswith(tipo)]
-
-    if len(matched) == 1:
-        return matched[0]
+def obter_tipo(tipo, tipos_validos):
+    correspondentes = [t for t in tipos_validos if t.startswith(tipo)]
+    if len(correspondentes) == 1:
+        return correspondentes[0]
     else:
         return tipo
 
-def add_minimum_unit(num):
-    # Convert to string to easily inspect decimal places
-    num_str = str(num)
-
-    # Check if the number is integer or float
+def adicionar_unidade_minima(numero):
+    # Converte para string para inspecionar casas decimais
+    num_str = str(numero)
+    # Verifica se o número é inteiro ou float
     if '.' in num_str:
-        # Find the position of the decimal point
-        decimal_pos = num_str.index('.')
-        # Check for trailing zeros after the decimal
-        decimal_places = 0 if num_str.endswith('.0') else len(num_str) - decimal_pos - 1
+        # Encontra a posição do ponto decimal
+        pos_decimal = num_str.index('.')
+        # Verifica zeros à direita após o decimal
+        casas_decimais = 0 if num_str.endswith('.0') else len(num_str) - pos_decimal - 1
 
-        # If number ends in .0, treat as integer
-        if decimal_places == 0:
-            return num + 1
+        # Se termina em .0, trata como inteiro
+        if casas_decimais == 0:
+            return numero + 1
 
-        # Calculate the smallest unit based on decimal places
-        unit = 10 ** -decimal_places
-        return num + unit
+        # Calcula a menor unidade baseada nas casas decimais
+        unidade = 10 ** -casas_decimais
+        return numero + unidade
     else:
-        # If it's an integer, just add 1
-        return num + 1
+        # Se for inteiro, adiciona 1
+        return numero + 1
 
-def process_command(args, tipo = None):
-    if len(args) == 0:
-        return
+def processar_comando(argumentos, tipo_anterior=None):
+    if len(argumentos) == 0:
+        return tipo_anterior
 
-    args0 = get_tipo(args[0], tipos_validos)
+    arg0 = obter_tipo(argumentos[0], tipos_validos)
 
-    if tipo and args0 not in tipos_validos:
-        args = [tipo] + args
-    elif args0 in tipos_validos:
-        tipo = args0
+    if tipo_anterior and arg0 not in tipos_validos:
+        argumentos = [tipo_anterior] + argumentos
+    elif arg0 in tipos_validos:
+        tipo = arg0
     else:
-        print_help()
-        return
+        imprimir_ajuda()
+        return tipo_anterior
 
-    if tipo in ( 'sair', 'exit' ):
+    if tipo in ('sair', 'exit'):
         print("Encerrando o programa.")
         sys.exit(0)
 
     if tipo in ('help', 'ajuda'):
-        print_help(False)
-        return
+        imprimir_ajuda(erro=False)
+        return tipo
 
-    if tipo in ('peca', 'peca-dewalt', 'maquina'):
-        if len(args) != 3:
-            print_help()
+    if tipo == 'dewalt':
+        if len(argumentos) != 2:
+            imprimir_ajuda()
             return tipo
+
         try:
-            custo = float(args[1])
+            minimo_anunciado = float(argumentos[1])
+            venda, bonus = calcular_preco_dewalt(minimo_anunciado)
+            print(f"Preço de venda, R$ {venda:.2f}")
+            print(f"À VISTA: R$ {minimo_anunciado:.2f}")
+            print(f"PROMOÇÃO: R$ {bonus:.2f} EM ACESSÓRIOS")
+        except ValueError:
+            print("<mínimo anunciado> deve ser um número")
 
-            if tipo == 'peca-dewalt':
-                custo = custo * (1 + DEWALT_FEE / 100)
+        return tipo
 
-            is_percentage = args[2][-1] == "%"
+    if tipo == 'vonder':
+        if len(argumentos) < 3:
+            imprimir_ajuda()
+            return tipo
 
-            if is_percentage:
-                ipi = float(args[2][:-1])
-                custo_nota = custo * (1 + ipi / 100)
-            else:
-                custo_nota = float(args[2])
+        try:
+            preco_normal = float(argumentos[1])
+            preco_sem_impostos = float(argumentos[2])
+            preco_com_impostos = preco_sem_impostos
 
-            if add_minimum_unit(custo_nota) < custo * (1 + CARGA_OPERACIONAL / 100):
-                reposicao = custo_nota * (1 + CARGA_OPERACIONAL / 100)
-            else:
-                reposicao = custo_nota
-                custo_nota = reposicao / (1 + CARGA_OPERACIONAL / 100)
+            if len(argumentos) == 4:
+                preco_com_impostos = float(argumentos[3])
 
-                if custo_nota < custo:
-                    custo_nota = custo
+            preco_normal_com_impostos = preco_normal * preco_com_impostos / preco_sem_impostos
+            reposicao = preco_normal_com_impostos * (1 + CARGA_OPERACIONAL / 100)
+            imprimir_custos(preco_sem_impostos, preco_com_impostos, reposicao)
+            preco_maquina(preco_com_impostos, preco_normal_com_impostos, reposicao)
+        except ValueError:
+            print("Todos os valores precisam ser números")
 
+        return tipo
+
+    if tipo in ('peca', 'maquina', 'acessorio'):
+        if len(argumentos) not in (2, 3):
+            imprimir_ajuda()
+            return tipo
+
+        try:
+            custo_fabrica = float(argumentos[1])
+            custo_nota = custo_fabrica
+
+            if len(argumentos) == 3:
+                if argumentos[2][-1] == "%":
+                    ipi = float(argumentos[2][:-1])
+                    custo_nota *= (1 + ipi / 100)
+                else:
+                    custo_nota = float(argumentos[2])
+
+            reposicao = custo_nota * (1 + CARGA_OPERACIONAL / 100)
         except ValueError:
             print("Custo e reposição devem ser números.")
             return tipo
 
-        if tipo in ( 'peca', 'peca-dewalt' ):
-            venda = round_price(price_peca(custo, reposicao))
+        imprimir_custos(custo_fabrica, custo_nota, reposicao)
 
-            print(f"- Custo de Fábrica:\tR$ {custo:.3f}\n- Custo nota:\t\tR$ {custo_nota:.3f}\n- Custo reposição:\tR$ {reposicao:.3f}\n")
-            print(f"Preço de venda:\t\tR$ {venda:.2f}")
-        elif tipo == 'maquina':
-            venda = round_price(price_maquina(custo, custo_nota, reposicao))
-            print(f"- Custo de Fábrica:\tR$ {custo:.3f}\n- Custo nota:\t\tR$ {custo_nota:.3f}\n- Custo reposição:\tR$ {reposicao:.3f}\n")
-            print(f"Preço de venda:\t\tR$ {venda:.2f}")
-    elif tipo == 'os':
-        if len(args) != 3:
-            print_help()
+        match tipo:
+            case 'peca':
+                venda = arredondar_preco(calcular_preco_peca(custo_nota, reposicao))
+                print(f"Preço de venda:\t\tR$ {venda:.2f}")
+            case 'maquina':
+                preco_maquina(custo_fabrica, custo_nota, reposicao)
+            case 'acessorio':
+                preco_acessorio(custo_fabrica, custo_nota, reposicao)
+
+        return tipo
+
+    if tipo == 'os':
+        if len(argumentos) != 2:
+            imprimir_ajuda()
             return tipo
+
         try:
-            lucro = float(args[1])
-            margem = float(args[2])
+            preco_bruto = int(argumentos[1])
         except ValueError:
-            print("Preço e margem devem ser números.")
+            print("Preço bruto deve ser um número.")
             return tipo
 
-        if lucro < 0 or margem < 0:
-            print("Preço e margem devem ser maiores que zero.")
+        if preco_bruto <= 0:
+            print("Preço bruto deve ser maior que zero.")
             return tipo
 
-        desconto = round_price(0.15 * (margem / 100) * lucro)
+        preco_a_vista = floor(adicionar_taxa(remover_taxa(preco_bruto, '3x'), '1x'))
+        desconto = preco_bruto - preco_a_vista
 
-        print(f"Desconto: R$ {desconto:.2f}")
-    elif tipo == 'parcelamento':
-        if len(args) != 3:
-            print_help()
+        print(f'R$ {preco_bruto} em até 3x no cartão')
+        print(f'R$ {preco_a_vista} à vista')
+        print(f'Desconto: R$ {desconto}')
+
+        return tipo
+
+    if tipo == 'parcelamento':
+        if len(argumentos) != 3:
+            imprimir_ajuda()
             return tipo
+
         try:
-            preco = float(args[1])
-            parcela = args[2]
+            preco = float(argumentos[1])
+            chave_parcela = argumentos[2]
         except ValueError:
             print("Preço deve ser um número.")
             return tipo
@@ -187,62 +268,57 @@ def process_command(args, tipo = None):
             print("O preço deve ser maior que zero.")
             return tipo
 
-        if parcela not in TAXAS:
-            print(f"Parcela inválida: '{parcela}'. Opções: {', '.join(TAXAS.keys())}")
+        if chave_parcela not in TAXAS:
+            print(f"Parcela inválida: '{chave_parcela}'. Opções: {', '.join(TAXAS.keys())}")
             return tipo
 
-        # Handle parcelamento
-        preco_a_vista = get_cash_price(preco, parcela)
-        for taxa, valor_taxa in TAXAS.items():
-            preco_final = add_taxa(preco_a_vista, taxa)
+        # Calcula preço à vista
+        preco_a_vista = remover_taxa(preco, chave_parcela)
+        for chave_taxa, valor_taxa in TAXAS.items():
+            preco_final = adicionar_taxa(preco_a_vista, chave_taxa)
 
-            if taxa[0].isdigit():
-                number_of_installments = int(''.join(filter(str.isdigit, taxa)))
+            if chave_taxa[0].isdigit():
+                numero_parcelas = int(''.join(filter(str.isdigit, chave_taxa)))
 
-                if number_of_installments == 1:
-                    # Special case for 1x (one-time payment)
-                    print(f"{taxa}: R$ {preco_final:.2f}")
+                if numero_parcelas == 1:
+                    print(f"{chave_taxa}: R$ {preco_final:.2f}")
                 else:
-                    sem_entrada = f"{taxa} {preco_final / number_of_installments:.2f} (R$ {preco_final:.2f})"
-                    valor_parcela, valor_total = upfront_installment(preco_a_vista, number_of_installments)
-                    com_entrada = f" | 1+{number_of_installments - 1}x R$ {valor_parcela:.2f} (R$ {valor_total:.2f})"
+                    sem_entrada = f"{chave_taxa} {preco_final / numero_parcelas:.2f} (R$ {preco_final:.2f})"
+                    valor_parcela, valor_total = calcular_parcela_com_entrada(preco_a_vista, numero_parcelas)
+                    com_entrada = f" | 1+{numero_parcelas - 1}x R$ {valor_parcela:.2f} (R$ {valor_total:.2f})"
                     print(f"{sem_entrada}{com_entrada}")
             else:
-                # For non-digit-based options like 'debito' and 'dinheiro'
-                print(f"{taxa}: R$ {preco_final:.2f}")
+                print(f"{chave_taxa}: R$ {preco_final:.2f}")
 
-    return tipo
+        return tipo
 
 if __name__ == "__main__":
-    # Load the constants
-    constants = load_constants('vars.txt')
+    # Carrega as constantes
+    constantes = carregar_constantes('vars.txt')
+    A = constantes.get("A")
+    B = constantes.get("B")
+    C = constantes.get("C")
+    CARGA_OPERACIONAL = constantes.get("CARGA_OPERACIONAL")
+    TAXAS = carregar_taxas("taxas.json")
 
-    A = constants.get("A")
-    B = constants.get("B")
-    C = constants.get("C")
-    CARGA_OPERACIONAL = constants.get("CARGA_OPERACIONAL")
-    DEWALT_FEE = constants.get("DEWALT_FEE")
-    TAXAS = load_taxas("taxas.json")
-
-    # Check if arguments are passed
-    if len(sys.argv) > 1:
-        # Process the arguments directly if any are provided
-        process_command(sys.argv[1:])
-        sys.exit(0)  # Exit after processing the command-line arguments
-
-    # Interactive mode if no arguments are passed
-    print("Bem-vindo ao calculador. Digite um comando (ou 'sair' para sair):")
-
-    tipos_validos = ( 'peca', 'peca-dewalt', 'maquina', 'parcelamento', 'os', 'sair', 'exit', 'ajuda', 'help' )
+    tipos_validos = ('peca', 'maquina', 'acessorio', 'dewalt', 'vonder', 'parcelamento', 'os', 'sair', 'exit', 'ajuda', 'help')
     tipo = None
+
+    # Verifica se argumentos foram passados via linha de comando
+    if len(sys.argv) > 1:
+        processar_comando(sys.argv[1:])
+        sys.exit(0)
+
+    # Modo interativo se não houver argumentos
+    print("Bem-vindo ao calculador. Digite um comando (ou 'sair' para sair):")
 
     while True:
         try:
-            user_input = input(f"{tipo if tipo else ''}> ").strip().lower()  # Wait for user input
+            entrada_usuario = input(f"{tipo if tipo else ''}> ").strip().lower()
         except EOFError:
-            break  # Handle Ctrl+D for exit
+            break
 
-        args = user_input.split()
+        argumentos = entrada_usuario.split()
         print()
-        tipo = process_command(args, tipo)
+        tipo = processar_comando(argumentos, tipo)
         print()

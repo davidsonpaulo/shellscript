@@ -1,16 +1,15 @@
 #!/bin/bash
 
-Dirs=( "/home/davidson/windows/Downloads" )
+Dirs=( "/home/davidson/windows/Downloads"
+       "/home/davidson/windows/Pictures/Screenshots" )
 
 deleteEmptyDirs() {
-    local dir="$1"
+    [[ -d "$1" ]] || return 1
 
-    find "$dir" -mindepth 1 -maxdepth 1 -type d |
-    while read -r d ; do
-        deleteEmptyDirs "$d"
-
-        if [ -z "$(ls -A "$d")" ]; then
-            rmdir -v "$d"
+    find "$1" -mindepth 1 -depth -type d -empty -print0 2>/dev/null |
+    while IFS= read -r -d '' dir; do
+        if rmdir "$dir"; then
+            printf 'Removed: %s\n' "$dir"
         fi
     done
 }
@@ -18,9 +17,10 @@ deleteEmptyDirs() {
 for (( i=0; i<${#Dirs[@]}; i++ )) ; do
     Dir="${Dirs[$i]}"
 
+    [[ -d "$1" ]] || continue
+
     echo "+ Cleaning up directory '$Dir'..."
-    find "$Dir" -type f -atime +30 | xargs -i rm -v "{}"
-    find "$Dir" -type f -mtime +90 | xargs -i rm -v "{}"
+    find "$Dir" -type f \( -atime +30 -o -mtime +90 \) -print -delete
     deleteEmptyDirs "$Dir"
 done
 
