@@ -69,6 +69,17 @@ def calcular_preco_acessorio(custo_fabrica, custo_nota, reposicao):
     preco_peca = calcular_preco_peca(custo_nota, reposicao)
     return sqrt(preco_maquina * preco_peca)
 
+def calcular_preco_dewalt(minimo_anunciado):
+    preco_vista = remover_taxa(minimo_anunciado, "1x")
+    preco_venda = adicionar_taxa(preco_vista, "6x")
+    bonus = minimo_anunciado - preco_vista
+    return ceil(preco_venda), floor(bonus)
+
+def calcular_orcamento_minimo(preco_bruto, mao_de_obra, lucro_total):
+    reposicao = (preco_bruto - lucro_total - mao_de_obra * (COMISSAO_MAO_DE_OBRA / 100))
+    custo = reposicao / (1 + CARGA_OPERACIONAL / 100)
+    return arredondar_preco( calcular_preco_peca(custo, reposicao) + mao_de_obra )
+
 def preco_maquina(custo_fabrica, custo_nota, reposicao):
     preco_normal, desconto, preco_a_prazo, preco_a_vista  = calcular_preco_maquina(custo_fabrica, custo_nota, reposicao)
 
@@ -83,12 +94,6 @@ def preco_acessorio(custo_fabrica, custo_nota, reposicao):
     preco = calcular_preco_acessorio(custo_fabrica, custo_nota, reposicao)
     
     print(f"Preço: R$ {preco:.2f}")
-
-def calcular_preco_dewalt(minimo_anunciado):
-    preco_vista = remover_taxa(minimo_anunciado, "1x")
-    preco_venda = adicionar_taxa(preco_vista, "6x")
-    bonus = minimo_anunciado - preco_vista
-    return ceil(preco_venda), floor(bonus)
 
 def imprimir_custos(custo_fabrica, custo_nota, reposicao):
     print(f"- Custo de Fábrica:\tR$ {custo_fabrica:.3f}\n- Custo nota:\t\tR$ {custo_nota:.3f}\n- Custo reposição:\tR$ {reposicao:.3f}\n")
@@ -142,6 +147,7 @@ def processar_comando(argumentos, tipo_anterior=None):
 
     if tipo_anterior and arg0 not in tipos_validos:
         argumentos = [tipo_anterior] + argumentos
+        tipo = tipo_anterior
     elif arg0 in tipos_validos:
         tipo = arg0
     else:
@@ -229,7 +235,7 @@ def processar_comando(argumentos, tipo_anterior=None):
         return tipo
 
     if tipo == 'os':
-        if len(argumentos) != 2:
+        if len(argumentos) not in ( 2, 4 ):
             imprimir_ajuda()
             return tipo
 
@@ -249,6 +255,26 @@ def processar_comando(argumentos, tipo_anterior=None):
         print(f'R$ {preco_bruto} em até 3x no cartão')
         print(f'R$ {preco_a_vista} à vista')
         print(f'Desconto: R$ {desconto}')
+
+        if len(argumentos) == 4:
+            try:
+                mao_de_obra = int(argumentos[2])
+            except ValueError:
+                print("Mão de obra deve ser um número.")
+                return tipo
+
+            if mao_de_obra <= 0:
+                print("Mão de obra deve ser maior que zero.")
+                return tipo
+
+            try:
+                lucro_total = float(argumentos[3])
+            except ValueError:
+                print("Lucro líquido deve ser um número.")
+                return tipo
+
+            preco_minimo = calcular_orcamento_minimo(preco_bruto, mao_de_obra, lucro_total)
+            print(f"\nOrçamento mínimo: R$ {preco_minimo:.2f}")
 
         return tipo
 
@@ -299,6 +325,7 @@ if __name__ == "__main__":
     B = constantes.get("B")
     C = constantes.get("C")
     CARGA_OPERACIONAL = constantes.get("CARGA_OPERACIONAL")
+    COMISSAO_MAO_DE_OBRA = constantes.get("COMISSAO_MAO_DE_OBRA")
     TAXAS = carregar_taxas("taxas.json")
 
     tipos_validos = ('peca', 'maquina', 'acessorio', 'dewalt', 'vonder', 'parcelamento', 'os', 'sair', 'exit', 'ajuda', 'help')
