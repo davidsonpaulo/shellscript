@@ -75,7 +75,7 @@ def calcular_preco_dewalt(minimo_anunciado):
     bonus = minimo_anunciado - preco_vista
     return ceil(preco_venda), floor(bonus)
 
-def calcular_orcamento_minimo(preco_bruto, mao_de_obra, lucro_total):
+def calcular_orcamento_minimo(preco_bruto, lucro_total, mao_de_obra):
     reposicao = (preco_bruto - lucro_total - mao_de_obra * (COMISSAO_MAO_DE_OBRA / 100))
     custo = reposicao / (1 + CARGA_OPERACIONAL / 100)
     return arredondar_preco( calcular_preco_peca(custo, reposicao) + mao_de_obra )
@@ -107,7 +107,7 @@ def imprimir_ajuda(erro=True):
     print("dewalt <mínimo anunciado>")
     print("vonder <preço normal>, <preço sem impostos>, <preco com impostos>")
     print("parcelamento <preço> <parcelas>")
-    print("os <preço bruto>")
+    print("os <preço bruto> [<lucro total> [<mão de obra>]]")
     print("ajuda / help")
     print("sair / exit")
 
@@ -235,12 +235,12 @@ def processar_comando(argumentos, tipo_anterior=None):
         return tipo
 
     if tipo == 'os':
-        if len(argumentos) not in ( 2, 4 ):
+        if len(argumentos) not in ( 2, 3, 4 ):
             imprimir_ajuda()
             return tipo
 
         try:
-            preco_bruto = int(argumentos[1])
+            preco_bruto = float(argumentos[1])
         except ValueError:
             print("Preço bruto deve ser um número.")
             return tipo
@@ -254,26 +254,29 @@ def processar_comando(argumentos, tipo_anterior=None):
 
         print(f'R$ {preco_bruto} em até 3x no cartão')
         print(f'R$ {preco_a_vista} à vista')
-        print(f'Desconto: R$ {desconto}')
+        print(f'Desconto: R$ {desconto:.2f}')
 
-        if len(argumentos) == 4:
-            try:
-                mao_de_obra = int(argumentos[2])
-            except ValueError:
-                print("Mão de obra deve ser um número.")
-                return tipo
-
-            if mao_de_obra <= 0:
-                print("Mão de obra deve ser maior que zero.")
-                return tipo
+        if len(argumentos) > 2:
+            mao_de_obra = 0
 
             try:
-                lucro_total = float(argumentos[3])
+                lucro_total = float(argumentos[2])
             except ValueError:
                 print("Lucro líquido deve ser um número.")
                 return tipo
 
-            preco_minimo = calcular_orcamento_minimo(preco_bruto, mao_de_obra, lucro_total)
+            if len(argumentos) == 4:
+                try:
+                    mao_de_obra = float(argumentos[3])
+                except ValueError:
+                    print("Mão de obra deve ser um número.")
+                    return tipo
+
+                if mao_de_obra < 0:
+                    print("Mão de obra deve ser maior ou igual a zero.")
+                    return tipo
+
+            preco_minimo = calcular_orcamento_minimo(preco_bruto, lucro_total, mao_de_obra)
             print(f"\nOrçamento mínimo: R$ {preco_minimo:.2f}")
 
         return tipo
