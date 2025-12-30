@@ -193,7 +193,7 @@ def processar_comando(argumentos, tipo_anterior=None):
 
             preco_normal_com_impostos = preco_normal * preco_com_impostos / preco_sem_impostos
             reposicao = preco_normal_com_impostos * (1 + CARGA_OPERACIONAL / 100)
-            imprimir_custos(preco_sem_impostos, preco_com_impostos, reposicao)
+            imprimir_custos(preco_normal, preco_normal_com_impostos, reposicao)
             preco_maquina(preco_com_impostos, preco_normal_com_impostos, reposicao)
         except ValueError:
             print("Todos os valores precisam ser números")
