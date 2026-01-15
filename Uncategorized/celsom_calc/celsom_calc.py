@@ -71,7 +71,7 @@ def calcular_preco_acessorio(custo_fabrica, custo_nota, reposicao):
 
 def calcular_preco_dewalt(minimo_anunciado):
     preco_vista = remover_taxa(minimo_anunciado, "1x")
-    preco_venda = adicionar_taxa(preco_vista, "6x")
+    preco_venda = adicionar_taxa(preco_vista, "10x")
     bonus = minimo_anunciado - preco_vista
     return ceil(preco_venda), floor(bonus)
 
