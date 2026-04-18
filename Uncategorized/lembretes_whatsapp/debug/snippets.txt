@@ -1,0 +1,3 @@
+REFERENTE_MULTIPLO = Referente às ordens de serviço *{{ORDENS_DE_SERVICO}}* em nome *{{CLIENTE}}*, dos equipamentos *{{EQUIPAMENTOS}}*
+VALOR_DO_CONSERTO = Valor do conserto: {{snippet:ORCAMENTO}}
+ORCAMENTO = {{if:PRECO_BRUTO}}R$ {{PRECO_BRUTO}}, com descontos ficou {{endif}}*R$ {{PRECO}}*

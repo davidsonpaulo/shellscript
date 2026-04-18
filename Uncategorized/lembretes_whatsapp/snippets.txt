@@ -1,0 +1,11 @@
+REFERENTE = Referente à ordem de serviço *{{OS}}* em nome de *{{CLIENTE}}*, do equipamento *{{EQUIPAMENTO}}*
+
+REFERENTE_MULTIPLO = Referente às ordens de serviço *{{ORDENS_DE_SERVICO}}* em nome *{{CLIENTE}}*, dos equipamentos *{{EQUIPAMENTOS}}*
+
+ORCAMENTO = {{if:PRECO_BRUTO}}R$ {{PRECO_BRUTO}}, com descontos ficou {{endif}}*R$ {{PRECO}}*
+
+VALOR_DO_CONSERTO = Valor do conserto: {{snippet:ORCAMENTO}}
+
+MONTAR_OU_NAO = Caso queira retirar o equipamento montado, a taxa de diagnóstico é *R$ {{TAXA_DIAGNOSTICO}}*. Caso queira retirar desmontado ou descartar, não cobramos nada. Qual sua preferência?
+
+RETIRAR_OU_DESCARTAR = Qual a data prevista para retirada do equipamento? Caso seja da sua preferência, podemos realizar o descarte.

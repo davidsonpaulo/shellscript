@@ -98,10 +98,6 @@ def calcular_preco_maquina(custo_fabrica: Decimal, custo_nota: Decimal, reposica
     lucro_normal = remover_taxa(venda_normal, '10x') - custo_nota
 
     if custo_nota > custo_fabrica:
-        #venda_desconto = adicionar_taxa(custo_fabrica + lucro_normal, '10x')
-        #diferenca_precos = venda_normal - venda_desconto
-        #preco_venda = venda_desconto + diferenca_precos / Decimal(2)
-        #preco_venda_vista = adicionar_taxa(remover_taxa(preco_venda, '10x'), '1x')
         return venda_normal, True, preco_venda, preco_venda_vista
 
     venda_normal_vista = adicionar_taxa(remover_taxa(venda_normal, '10x'), '1x')
@@ -371,7 +367,8 @@ def processar_comando(argumentos, tipo_anterior=None):
             else:
                 preco_min = min(mao, pecas)
                 preco_max = max(mao, pecas)
-                desconto = (preco_max * preco_min * preco_min) / (bruto * bruto)
+                #desconto = (preco_max * preco_min * preco_min) / (bruto * bruto)
+                desconto = Decimal('0.14') * preco_min * preco_max / (preco_max + 1)
                 desconto = desconto.quantize(um, rounding=ROUND_FLOOR)
 
             liquido = bruto - desconto

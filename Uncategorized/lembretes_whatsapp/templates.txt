@@ -1,0 +1,23 @@
+APROVAR_ORCAMENTO = {{macro:bom_dia_tarde_noite}} {{snippet:REFERENTE}}. Fizemos o diagnóstico, o orçamento é {{snippet:ORCAMENTO}}. *{{if:ESTOQUE}}PEÇAS EM ESTOQUE{{else}}PRECISA ENCOMENDAR PEÇAS{{endif}}.* {{if:ENTRADA}}Caso queira consertar, para encomenda de peças é necessário pagamento de entrada de 50%, ou *R$ {{ENTRADA}}*. {{endif}}Deseja aprovar o orçamento?
+
+LEMBRETE_APROVAR_ORCAMENTO = {{macro:bom_dia_tarde_noite}} Um lembrete para solicitar uma resposta referente ao orçamento da ordem de serviço *{{OS}}* em nome de *{{CLIENTE}}*, do equipamento *{{EQUIPAMENTO}}*, no valor de *R$ {{PRECO}}*. {{if:ENTRADA}}Caso queira consertar, para encomenda de peças é necessário pagamento de entrada de 50%, ou *R$ {{ENTRADA}}*. {{endif}}Deseja aprovar o orçamento?
+
+PAGAMENTO_ENTRADA = {{macro:bom_dia_tarde_noite}} {{snippet:REFERENTE}}. Estamos aguardando o pagamento da entrada de 50% para encomenda de peças, no valor de *R$ {{ENTRADA}}*. Como deseja efetuar o pagamento?
+
+ULTIMATO_CONSERTADO = {{macro:bom_dia_tarde_noite}} {{snippet:REFERENTE}} que foi consertado em {{CONSERTADO}}. Informamos que a data limite para realizar o pagamento e a retirada do equipamento é *{{LIMITE}}*. {{snippet:VALOR_DO_CONSERTO}}. Após essa data, o equipamento será considerado abandonado e não mais voltaremos a entrar em contato. Qual a data estimada para retirada do equipamento?
+
+CONSERTADO = {{macro:bom_dia_tarde_noite}} {{snippet:REFERENTE}}. O equipamento está pronto e já pode ser retirado. {{if:PAGO}}Já está pago{{else}}{{snippet:VALOR_DO_CONSERTO}}{{if:FALTA}}, falta *R$ {{FALTA}}*{{endif}}{{endif}}.
+
+RETIRADA = {{macro:bom_dia_tarde_noite}} {{snippet:REFERENTE}} que foi consertado em {{CONSERTADO}}. Estamos aguardando {{if:!PAGO}}o pagamento do serviço e {{endif}}a retirada do equipamento. {{if:PAGO}}Já está pago{{else}}{{snippet:VALOR_DO_CONSERTO}}{{if:FALTA}}, falta *R$ {{FALTA}}*{{endif}}{{endif}}. Qual a data estimada para retirada do equipamento?
+
+NAO_COMPENSA = {{macro:bom_dia_tarde_noite}} {{snippet:REFERENTE}}. Fizemos a análise. O orçamento do conserto é {{snippet:ORCAMENTO}}. *NÃO COMPENSA CONSERTAR*. {{if:TAXA_DIAGNOSTICO}}{{snippet:MONTAR_OU_NAO}}{{else}}{{snippet:RETIRAR_OU_DESCARTAR}}{{endif}}
+
+GARANTIA_PRONTO = {{macro:bom_dia_tarde_noite}} {{snippet:REFERENTE}} em garantia. O serviço foi concluído e o equipamento já pode ser retirado.{{if:FORA_DE_GARANTIA}} Algumas peças estavam fora de garantia e deverão ser pagas, valor total *R$ {{PRECO}}*.{{endif}} Pedimos por gentileza nos informar qual a data estimada para retirada do equipamento.
+
+GARANTIA_RETIRADA = {{macro:bom_dia_tarde_noite}} {{snippet:REFERENTE}} em garantia. Este é um lembrete para retirar o seu equipamento que foi consertado em {{DATA_CONSERTO}}.{{if:FORA_DE_GARANTIA}} Está pendente o pagamento do valor de *R$ {{PRECO}}* referente a peças que estavam fora de garantia.{{endif}} Qual a previsão para retirada do equipamento?
+
+GARANTIA_SEM_DEFEITO = {{macro:bom_dia_tarde_noite}} {{snippet:REFERENTE}} em garantia. Fizemos a análise e o equipamento *não apresentou defeito* e está disponível para retirada em nossa oficina. Pedimos por gentileza nos informar qual a data estimada para retirada do equipamento.
+
+RETIRADA_MULTIPLA = {{macro:bom_dia_tarde_noite}} {{snippet:REFERENTE_MULTIPLO}}. Estamos aguardando {{if:!PAGO}}o pagamento dos serviços e {{endif}}a retirada dos equipamentos. {{if:PAGO}}Já está pago{{else}}{{snippet:VALOR_DO_CONSERTO}}{{if:FALTA}}, falta *R$ {{FALTA}}*{{endif}}{{endif}}. Qual a data estimada para retirada dos equipamentos?
+
+RETIRAR_SIM_OU_NAO = {{macro:bom_dia_tarde_noite}} {{snippet:REFERENTE}} que foi analisado em {{DIAGNOSTICADO}} e não teve conserto. {{if:TAXA_DIAGNOSTICO}}{{snippet:MONTAR_OU_NAO}}{{else}}{{snippet:RETIRAR_OU_DESCARTAR}}{{endif}}

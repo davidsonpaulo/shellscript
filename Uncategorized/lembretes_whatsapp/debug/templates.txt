@@ -1,0 +1,1 @@
+RETIRADA_MULTIPLA = {{macro:bom_dia_tarde_noite}} {{snippet:REFERENTE_MULTIPLO}}. Estamos aguardando {{if:!PAGO}}o pagamento dos serviços e {{endif}}a retirada dos equipamentos. {{if:PAGO}}Já está pago{{else}}{{snippet:VALOR_DO_CONSERTO}}{{if:FALTA}}, falta *R$ {{FALTA}}*{{endif}}{{endif}}. Qual a data estimada para retirada dos equipamentos?
