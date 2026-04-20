@@ -8,6 +8,7 @@ import platform
 from common import (
     carregar_templates_globais,
     carregar_snippets_globais,
+    carregar_one_shot_templates,
     TEMPLATES,
     SNIPPETS,
     parse_parametros,
@@ -19,6 +20,7 @@ from common import (
 def main():
     carregar_templates_globais()
     carregar_snippets_globais()
+    carregar_one_shot_templates()
 
     print("=== Sistema de Lembretes WhatsApp ===\n")
 

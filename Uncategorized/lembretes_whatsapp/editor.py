@@ -6,8 +6,10 @@ from datetime import datetime, date, timedelta
 from common import (
     carregar_templates_globais,
     carregar_snippets_globais,
+    carregar_one_shot_templates,
     TEMPLATES,
     SNIPPETS,
+    ONE_SHOT_TEMPLATES,
     parse_parametros,
     extrair_variaveis_e_opcionais,
     editar_parametros
@@ -17,6 +19,7 @@ from common import (
 def main():
     carregar_templates_globais()
     carregar_snippets_globais()
+    carregar_one_shot_templates()
 
     print("=== Gerenciador de Agendamentos WhatsApp (editor) ===\n")
 
@@ -29,6 +32,7 @@ def main():
         print("5. Desativar entrada")
         print("r. Recarregar / Reiniciar")
         print("6. Sair")
+        print("7. Atualizar templates one-shot (aplicar próximo template)")
         print("="*60)
 
         opcao = input("\nEscolha (1-6 ou r): ").strip().lower()
@@ -285,6 +289,59 @@ def main():
         elif opcao == "6":
             print("Encerrando gerenciador.")
             break
+        elif opcao == "7":
+            print("\n=== Atualização Automática de Templates One-Shot ===")
+            if not ONE_SHOT_TEMPLATES:
+                print("Nenhum template one-shot configurado.")
+                input("\nPressione Enter para continuar...")
+                continue
+
+            linhas = carregar_config()
+            entradas = obter_entradas(linhas)
+            alteradas = 0
+
+            for ent in entradas:
+                template_atual = ent["template"]
+                if template_atual in ONE_SHOT_TEMPLATES:
+                    proximo = ONE_SHOT_TEMPLATES[template_atual]
+
+                    # Só atualiza se já foi enviado pelo menos uma vez
+                    if ent.get("ultimo_envio") and ent["ultimo_envio"] != "2099-12-31":
+                        print(f"\nEncontrada: {ent['nome']} ({ent['telefone']})")
+                        print(f"   Template atual: {template_atual}")
+                        print(f"   Próximo sugerido: {proximo if proximo else '(nenhum)'}")
+
+                        if proximo and proximo in TEMPLATES:
+                            confirmar = input("   Aplicar troca para o próximo template? (s/n, Enter=s): ").strip().lower()
+                            if confirmar in ("", "s", "sim"):
+                                ent["template"] = proximo
+
+                                # Opcional: editar parâmetros após troca
+                                if input("   Deseja editar os parâmetros agora? (s/n): ").lower() == "s":
+                                    editar_parametros(ent)
+
+                                # Reconstruir linha
+                                nova_linha = (
+                                    f"{ent.get('telefone', '')}\t"
+                                    f"{ent.get('nome', '')}\t"
+                                    f"{ent.get('template', '')}\t"
+                                    f"{ent.get('parametros_str', '')}\t"
+                                    f"{ent.get('frequencia', '1/1')}\t"
+                                    f"{ent.get('ultimo_envio', '')}\n"
+                                )
+                                linhas[ent["idx_linha"]] = nova_linha
+                                alteradas += 1
+                                print(f"   ✅ Alterado para: {proximo}")
+                        else:
+                            print("   (sem próximo template definido ou inválido)")
+
+            if alteradas > 0:
+                salvar_config(linhas)
+                print(f"\n✅ {alteradas} entrada(s) atualizada(s) com sucesso!")
+            else:
+                print("\nNenhuma entrada one-shot pendente de atualização.")
+
+            input("\nPressione Enter para voltar ao menu...")
 
         else:
             print("Opção inválida.")
