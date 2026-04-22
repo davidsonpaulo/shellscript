@@ -220,11 +220,12 @@ def editar_parametros(ent):
             print("   (nenhum parâmetro definido)")
 
         print("\nVariáveis disponíveis:")
-        vars_raiz = sorted(todas - set().union(*[set(v) for v in condicionais.values()]))
+        # CORREÇÃO: incluir também as variáveis condicionais
+        todas_vars = sorted(info_vars['todas'] | set(info_vars['opcionais_raiz']))
 
         print("  Variáveis principais:")
-        for var in sorted(vars_raiz):
-            status = "(opcional)" if var in opcionais_raiz else "(obrigatória)"
+        for var in todas_vars:
+            status = "(opcional)" if var in info_vars['opcionais_raiz'] else "(obrigatória)"
             atual = params_dict.get(var, "(não definido)")
             print(f"    {var:20} → {atual:30} {status}")
 
@@ -329,10 +330,9 @@ def pode_enviar(frequencia, ultimo_envio_str):
             return True
     return True
 
-# ===================== CONFIGURAÇÃO DE PARÂMETROS PARA NOVO TEMPLATE (VERSÃO FINAL) =====================
+# ===================== CONFIGURAÇÃO DE PARÂMETROS PARA NOVO TEMPLATE (VERSÃO CORRIGIDA) =====================
 def configurar_parametros_para_template(template_nome, parametros_antigos_str=""):
-    """Versão final: sempre pergunta todas as variáveis do novo template,
-    pré-preenche com valores antigos quando possível e força obrigatórias."""
+    """Versão corrigida: inclui também variáveis que aparecem apenas em condições {{if:}}"""
     if template_nome not in TEMPLATES:
         print(f"❌ Template '{template_nome}' não encontrado.")
         return ""
@@ -345,7 +345,8 @@ def configurar_parametros_para_template(template_nome, parametros_antigos_str=""
     print(f"\n=== Configurando PARÂMETROS para o NOVO template '{template_nome}' ===")
     print("Os valores antigos serão mostrados. Pressione Enter para manter ou digite novo valor.\n")
 
-    todas_vars = sorted(info_vars['todas'])
+    # CORREÇÃO: unir variáveis simples + variáveis condicionais
+    todas_vars = sorted(info_vars['todas'] | set(info_vars['opcionais_raiz']))
 
     for var in todas_vars:
         is_opcional = (var in info_vars['opcionais_raiz']) or \
@@ -362,22 +363,19 @@ def configurar_parametros_para_template(template_nome, parametros_antigos_str=""
         if novo_val == "":
             if valor_antigo:
                 print(f"     → mantido valor antigo")
-                # continua com o valor antigo
                 pass
             elif not is_opcional:
-                # obrigatório e sem valor antigo → força
                 while not novo_val:
                     novo_val = input(f"  {var} (OBRIGATÓRIO - digite um valor): ").strip()
                 params_dict[var] = novo_val
             else:
-                # opcional e sem valor → remove
                 params_dict.pop(var, None)
                 print(f"     → removido (não informado)")
         else:
             params_dict[var] = novo_val
             print(f"     → atualizado")
 
-    # Variáveis condicionais dependentes
+    # Variáveis condicionais dependentes (mantido)
     for var_cond, deps in info_vars['condicionais'].items():
         if var_cond in params_dict and params_dict[var_cond]:
             print(f"\n→ '{var_cond}' definido → verificando dependentes:")
@@ -392,33 +390,3 @@ def configurar_parametros_para_template(template_nome, parametros_antigos_str=""
     parametros_str = ",".join(f"{k}={v}" for k, v in sorted(params_dict.items())) if params_dict else ""
     print("✅ Parâmetros configurados com sucesso.\n")
     return parametros_str
-
-
-if __name__ == "__main__":
-    entrada = """{{if:PAGO}}
-    Já está pago
-{{else}}
-    Valor do conserto:
-    {{if:PRECO_BRUTO}}
-        R$ {{PRECO_BRUTO}}, com descontos ficou
-    {{endif}}
-    {{if:!FALTA}}
-        *
-    {{endif}}
-    R$ {{PRECO}}
-    {{if:!FALTA}}
-        *
-    {{endif}}
-    {{if:FALTA}}
-        , falta *R$ {{FALTA}}*
-    {{endif}}
-{{endif}}"""
-
-    params = {
-        "PAGO": True,
-        "PRECO_BRUTO": True,
-        "PRECO": True,
-        "FALTA": False
-    }
-
-    print(processar_mensagem(entrada, params))
