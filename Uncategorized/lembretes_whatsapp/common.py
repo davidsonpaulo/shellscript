@@ -330,23 +330,26 @@ def pode_enviar(frequencia, ultimo_envio_str):
             return True
     return True
 
-# ===================== CONFIGURAÇÃO DE PARÂMETROS PARA NOVO TEMPLATE (VERSÃO CORRIGIDA) =====================
+# ===================== CONFIGURAÇÃO DE PARÂMETROS PARA NOVO TEMPLATE (VERSÃO MELHORADA) =====================
 def configurar_parametros_para_template(template_nome, parametros_antigos_str=""):
-    """Versão corrigida: inclui também variáveis que aparecem apenas em condições {{if:}}"""
+    """Versão melhorada: mantém parâmetros antigos que não existem no novo template."""
     if template_nome not in TEMPLATES:
         print(f"❌ Template '{template_nome}' não encontrado.")
-        return ""
+        return parametros_antigos_str  # mantém o que tinha
 
     template_texto = TEMPLATES[template_nome]
     info_vars = extrair_variaveis_e_opcionais(template_texto)
 
+    # Parâmetros antigos (mantidos)
     params_dict = parse_parametros(parametros_antigos_str) if parametros_antigos_str else {}
 
-    print(f"\n=== Configurando PARÂMETROS para o NOVO template '{template_nome}' ===")
-    print("Os valores antigos serão mostrados. Pressione Enter para manter ou digite novo valor.\n")
+    # Parâmetros do novo template
+    novas_vars = info_vars['todas'] | set(info_vars['opcionais_raiz'])
 
-    # CORREÇÃO: unir variáveis simples + variáveis condicionais
-    todas_vars = sorted(info_vars['todas'] | set(info_vars['opcionais_raiz']))
+    print(f"\n=== Configurando PARÂMETROS para o NOVO template '{template_nome}' ===")
+    print("Os valores antigos serão mantidos quando possível. Pressione Enter para manter ou digite novo valor.\n")
+
+    todas_vars = sorted(novas_vars)
 
     for var in todas_vars:
         is_opcional = (var in info_vars['opcionais_raiz']) or \
@@ -363,19 +366,22 @@ def configurar_parametros_para_template(template_nome, parametros_antigos_str=""
         if novo_val == "":
             if valor_antigo:
                 print(f"     → mantido valor antigo")
+                # mantém o valor antigo
                 pass
             elif not is_opcional:
+                # obrigatório sem valor antigo → força
                 while not novo_val:
                     novo_val = input(f"  {var} (OBRIGATÓRIO - digite um valor): ").strip()
                 params_dict[var] = novo_val
             else:
+                # opcional e sem valor → remove (ou mantém se quiser, mas padrão é remover)
                 params_dict.pop(var, None)
                 print(f"     → removido (não informado)")
         else:
             params_dict[var] = novo_val
             print(f"     → atualizado")
 
-    # Variáveis condicionais dependentes (mantido)
+    # Variáveis condicionais dependentes
     for var_cond, deps in info_vars['condicionais'].items():
         if var_cond in params_dict and params_dict[var_cond]:
             print(f"\n→ '{var_cond}' definido → verificando dependentes:")
@@ -387,6 +393,13 @@ def configurar_parametros_para_template(template_nome, parametros_antigos_str=""
                     val = input(f"  {var_dep} (obrigatório): ").strip()
                 params_dict[var_dep] = val
 
+    # IMPORTANTE: Mantém parâmetros antigos que NÃO existem no novo template
+    # (ex: ESTOQUE, FALTA, LIMITE, CONSERTADO, etc.)
+    for chave, valor in list(params_dict.items()):
+        if chave not in novas_vars and chave not in info_vars['condicionais']:
+            # Mantém parâmetros "legados"
+            pass  # já estão no params_dict
+
     parametros_str = ",".join(f"{k}={v}" for k, v in sorted(params_dict.items())) if params_dict else ""
-    print("✅ Parâmetros configurados com sucesso.\n")
+    print("✅ Parâmetros configurados com sucesso (parâmetros antigos preservados quando possível).\n")
     return parametros_str
