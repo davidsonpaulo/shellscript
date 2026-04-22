@@ -12,7 +12,8 @@ from common import (
     ONE_SHOT_TEMPLATES,
     parse_parametros,
     extrair_variaveis_e_opcionais,
-    editar_parametros
+    editar_parametros,
+    configurar_parametros_para_template
 )
 
 # ===================== MENU PRINCIPAL =====================
@@ -52,7 +53,7 @@ def main():
             for i, e in enumerate(entradas, 1):
                 print(f"{i:2d}. {e['telefone']} | {e['nome'][:30]:30} | {e['template']:20} | Freq: {e['frequencia']}")
 
-        # ===================== CRIAR NOVA ENTRADA (VERSÃO FINAL CORRIGIDA) =====================
+        # ===================== CRIAR NOVA ENTRADA =====================
         elif opcao == "2":
             linhas = carregar_config()
 
@@ -64,6 +65,7 @@ def main():
             while not nome:
                 nome = input("NOME (obrigatório): ").strip()
 
+            # Lista de templates
             temp_list = sorted(TEMPLATES.keys())
             print("\nTemplates disponíveis:")
             for i, t in enumerate(temp_list, 1):
@@ -76,58 +78,29 @@ def main():
                 print("Template inválido.")
                 continue
 
-            template_texto = TEMPLATES[template_nome]
-            info_vars = extrair_variaveis_e_opcionais(template_texto)
+            # Configura parâmetros (já existente)
+            parametros_str = configurar_parametros_para_template(template_nome, "")
 
-            params_dict = {}
+            # ===================== DATA PADRÃO = HOJE =====================
+            data_str = input(f"\nData da PRIMEIRA execução [Enter = hoje ({date.today().strftime('%d/%m/%Y')})]: ").strip()
 
-            print(f"\nConfigurando parâmetros para template '{template_nome}':")
-
-            # Lista todas as variáveis do template
-            todas_vars = sorted(info_vars['todas'])
-
-            for var in todas_vars:
-                # É opcional se for raiz opcional OU se for usado dentro de algum if (condicional)
-                is_opcional = (var in info_vars['opcionais_raiz']) or \
-                              any(var in deps for deps in info_vars['condicionais'].values())
-
-                status = "(opcional - Enter = pular)" if is_opcional else "(OBRIGATÓRIO)"
-                val = input(f"  {var} {status}: ").strip()
-
-                while not val and not is_opcional:
-                    val = input(f"  {var} (OBRIGATÓRIO): ").strip()
-
-                if val:
-                    params_dict[var] = val
-
-            # Pergunta variáveis dependentes das condições que foram preenchidas
-            for var_cond, deps in info_vars['condicionais'].items():
-                if var_cond in params_dict and params_dict[var_cond]:
-                    print(f"\n→ '{var_cond}' foi definido → preencha as dependentes:")
-                    for var_dep in sorted(set(deps)):
-                        if var_dep in params_dict:
-                            continue
-                        val = input(f"  {var_dep} : ").strip()
-                        while not val:
-                            val = input(f"  {var_dep} (obrigatório): ").strip()
-                        params_dict[var_dep] = val
-
-            parametros_str = ",".join(f"{k}={v}" for k, v in params_dict.items()) if params_dict else ""
-
-            # Frequência e data
-            freq = input("\nFREQUENCIA (ex: 1/1): ").strip()
-            data_str = input("Data da PRIMEIRA execução (dd/mm/yyyy): ").strip()
-            try:
-                primeira = datetime.strptime(data_str, "%d/%m/%Y").date()
-            except:
+            if data_str == "":
                 primeira = date.today()
+            else:
+                try:
+                    primeira = datetime.strptime(data_str, "%d/%m/%Y").date()
+                except:
+                    print("Data inválida. Usando hoje.")
+                    primeira = date.today()
 
             ultimo_envio = (primeira - timedelta(days=1)).isoformat()
 
-            nova_linha = f"{telefone}\t{nome}\t{template_nome}\t{parametros_str}\t{freq}\t{ultimo_envio}\n"
+            # Monta a linha
+            nova_linha = f"{telefone}\t{nome}\t{template_nome}\t{parametros_str}\t1/1\t{ultimo_envio}\n"
+
             linhas.append(nova_linha)
             salvar_config(linhas)
-            print(f"\n✅ Nova entrada criada com sucesso!")
+            print(f"\n✅ Nova entrada criada com sucesso! (Primeira execução: {primeira.strftime('%d/%m/%Y')})")
 
         # ===================== EDITAR ENTRADA (VERSÃO FINAL CORRIGIDA) =====================
         elif opcao == "3":
@@ -299,26 +272,25 @@ def main():
             linhas = carregar_config()
             entradas = obter_entradas(linhas)
             alteradas = 0
+            hoje = date.today().isoformat()
 
             for ent in entradas:
                 template_atual = ent["template"]
                 if template_atual in ONE_SHOT_TEMPLATES:
                     proximo = ONE_SHOT_TEMPLATES[template_atual]
 
-                    # Só atualiza se já foi enviado pelo menos uma vez
-                    if ent.get("ultimo_envio") and ent["ultimo_envio"] != "2099-12-31":
+                    # Só atualiza se já foi enviado hoje
+                    if ent.get("ultimo_envio") == hoje:
                         print(f"\nEncontrada: {ent['nome']} ({ent['telefone']})")
                         print(f"   Template atual: {template_atual}")
-                        print(f"   Próximo sugerido: {proximo if proximo else '(nenhum)'}")
+                        print(f"   Próximo sugerido: {proximo}")
 
                         if proximo and proximo in TEMPLATES:
                             confirmar = input("   Aplicar troca para o próximo template? (s/n, Enter=s): ").strip().lower()
                             if confirmar in ("", "s", "sim"):
                                 ent["template"] = proximo
-
-                                # Opcional: editar parâmetros após troca
-                                if input("   Deseja editar os parâmetros agora? (s/n): ").lower() == "s":
-                                    editar_parametros(ent)
+                                # Configura os novos parâmetros (mesma lógica do main.py)
+                                ent["parametros_str"] = configurar_parametros_para_template(proximo, ent.get("parametros_str", ""))
 
                                 # Reconstruir linha
                                 nova_linha = (
@@ -331,7 +303,7 @@ def main():
                                 )
                                 linhas[ent["idx_linha"]] = nova_linha
                                 alteradas += 1
-                                print(f"   ✅ Alterado para: {proximo}")
+                                print(f"   ✅ Alterado para: {proximo} (parâmetros configurados)")
                         else:
                             print("   (sem próximo template definido ou inválido)")
 
@@ -339,7 +311,7 @@ def main():
                 salvar_config(linhas)
                 print(f"\n✅ {alteradas} entrada(s) atualizada(s) com sucesso!")
             else:
-                print("\nNenhuma entrada one-shot pendente de atualização.")
+                print("\nNenhuma entrada one-shot enviada hoje para atualizar.")
 
             input("\nPressione Enter para voltar ao menu...")
 

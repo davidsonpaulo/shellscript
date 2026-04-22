@@ -2,15 +2,42 @@ import os
 import re
 from datetime import datetime, date, timedelta
 
+# ===================== ONE-SHOT TEMPLATES =====================
+ONE_SHOT_TEMPLATES = {}
+
+def carregar_one_shot_templates():
+    global ONE_SHOT_TEMPLATES
+    ONE_SHOT_TEMPLATES.clear()
+
+    if not os.path.exists("templates.txt"):
+        print("⚠️  Arquivo templates.txt não encontrado. One-shot desativado.")
+        return
+
+    with open("templates.txt", "r", encoding="utf-8") as f:
+        for linha in f:
+            linha = linha.strip()
+            if not linha or linha.startswith("#"):
+                continue
+            if " -> " in linha:
+                partes = [p.strip() for p in linha.split(" -> ", 1)]
+                if len(partes) == 2:
+                    original = partes[0]
+                    proximo = partes[1] if partes[1] else None
+                    ONE_SHOT_TEMPLATES[original] = proximo
+
+    if ONE_SHOT_TEMPLATES:
+        print(f"✅ {len(ONE_SHOT_TEMPLATES)} templates one-shot carregados.")
+    else:
+        print("ℹ️  Nenhum template one-shot configurado.")
+
 # ===================== SNIPPETS =====================
 SNIPPETS = {}
 
 def carregar_snippets_globais():
-    """Carrega os snippets uma única vez."""
     global SNIPPETS
     SNIPPETS.clear()
     if not os.path.exists("snippets.txt"):
-        print("⚠️  Arquivo snippets.txt não encontrado. Snippets desativados.")
+        print("⚠️  Arquivo snippets.txt não encontrado.")
         return
     with open("snippets.txt", "r", encoding="utf-8") as f:
         for linha in f:
@@ -20,14 +47,12 @@ def carregar_snippets_globais():
             if "=" in linha:
                 nome, texto = linha.split("=", 1)
                 SNIPPETS[nome.strip()] = texto.strip()
-    print(f"✅ {len(SNIPPETS)} snippets carregados com sucesso.")
-
+    print(f"✅ {len(SNIPPETS)} snippets carregados.")
 
 # ===================== TEMPLATES GLOBAIS =====================
 TEMPLATES = {}
 
 def carregar_templates_globais():
-    """Carrega os templates uma única vez."""
     global TEMPLATES
     TEMPLATES.clear()
     if not os.path.exists("templates.txt"):
@@ -41,12 +66,11 @@ def carregar_templates_globais():
             if "=" in linha:
                 nome, texto = linha.split("=", 1)
                 TEMPLATES[nome.strip()] = texto.strip()
-    print(f"✅ {len(TEMPLATES)} templates carregados com sucesso.")
+    print(f"✅ {len(TEMPLATES)} templates carregados.")
 
 
-# ===================== MACROS (agora genérico e extensível) =====================
+# ===================== MACROS =====================
 def registrar_macros():
-    """Registre aqui todas as macros do sistema."""
     macros = {}
 
     def bom_dia_tarde_noite():
@@ -60,15 +84,9 @@ def registrar_macros():
             return f"Boa noite{padrao}"
 
     macros["bom_dia_tarde_noite"] = bom_dia_tarde_noite
-
-    # ← Adicione novas macros aqui no futuro (ex: moeda, plural, data_extenso, etc.)
-    # macros["moeda"] = macro_moeda
-    # macros["plural"] = macro_plural
-
     return macros
 
 MACROS = registrar_macros()
-
 
 # ===================== FUNÇÕES AUXILIARES =====================
 
@@ -89,14 +107,13 @@ def parse_parametros(param_str):
     return params
 
 
+# ===================== SNIPPETS =====================
 def processar_snippets(texto):
-    """Substitui {{snippet:NOME}} pelo conteúdo do snippet."""
     def substituir(match):
         nome = match.group(1).strip()
         return SNIPPETS.get(nome, f"[SNIPPET NÃO ENCONTRADO: {nome}]")
 
     padrao = r'\{\{snippet:([^}]+)\}\}'
-
     for _ in range(10):
         novo_texto = re.sub(padrao, substituir, texto)
         if novo_texto == texto:
@@ -104,24 +121,22 @@ def processar_snippets(texto):
         texto = novo_texto
     return texto
 
+# ===================== PROCESSAMENTO DE CONDICIONAIS =====================
 
 def avaliar_condicionais(texto, params):
-    """Fase 1: Cria dicionário de todas as tags condicionais → 'true' ou 'false'."""
     padrao = r'(\{\{if:\s*(!?)\s*([^}]+?)\s*\}\})'
     matches = re.findall(padrao, texto)
-
     cond_dict = {}
     for full_tag, negacao, condicao in matches:
         valor_real = str(params.get(condicao.strip(), "")).strip().lower()
-        condicao_verdadeira = valor_real not in ("", "false", "0", "não", "nao", "falso")
-        resultado = (not condicao_verdadeira) if negacao == "!" else condicao_verdadeira
-        cond_dict[full_tag] = 'true' if resultado else 'false'
-
+        verdade = valor_real not in ("", "false", "0", "não", "nao", "falso")
+        resultado = (not verdade) if negacao == "!" else verdade
+        cond_dict[full_tag] = resultado
     return cond_dict
 
 
 def processar_mensagem(template, params):
-    """Processa template seguindo o fluxo validado por você."""
+    """Processamento linear com stack - ignora bloco se QUALQUER nível for False."""
     texto = template
 
     # 1. Snippets
@@ -131,47 +146,52 @@ def processar_mensagem(template, params):
     for chave, valor in params.items():
         texto = texto.replace(f"{{{{{chave}}}}}", str(valor))
 
-    # 3. Macro (usando sistema genérico)
+    # 3. Macro
     texto = texto.replace("{{macro:bom_dia_tarde_noite}}", MACROS["bom_dia_tarde_noite"]())
 
-    # 4. Avaliar condicionais → dicionário
+    # 4. Avaliar condicionais
     cond_dict = avaliar_condicionais(texto, params)
 
-    # Substituir cada {{if:...}} por {{true}} ou {{false}}
-    for tag, valor in cond_dict.items():
-        texto = texto.replace(tag, "{{" + valor + "}}")
+    # 5. Processamento linear
+    resultado = []
+    i = 0
+    n = len(texto)
+    stack = []   # lista de booleanos
 
-    # 5. Tratar os {{else}} sequencialmente (invertendo o valor anterior)
-    ultimo_valor = None
-    while "{{else}}" in texto:
-        pos = texto.find("{{else}}")
-        if pos == -1:
-            break
+    while i < n:
+        if texto[i:i+5] == '{{if:':
+            fim = texto.find('}}', i)
+            if fim != -1:
+                full_tag = texto[i:fim + 2]
+                is_true = cond_dict.get(full_tag, False)
+                stack.append(is_true)
+                i = fim + 2
+                continue
 
-        antes = texto[:pos]
-        ultimo_true = antes.rfind("{{true}}")
-        ultimo_false = antes.rfind("{{false}}")
-        ultimo_pos = max(ultimo_true, ultimo_false)
+        elif texto[i:i+8] == '{{else}}':
+            if stack:
+                stack[-1] = not stack[-1]
+            i += 8
+            continue
 
-        if ultimo_pos != -1:
-            ultimo_valor = "true" if ultimo_true > ultimo_false else "false"
-        else:
-            ultimo_valor = "false"
+        elif texto[i:i+9] == '{{endif}}':
+            if stack:
+                stack.pop()
+            i += 9
+            continue
 
-        inverso = "{{false}}" if ultimo_valor == "true" else "{{true}}"
-        texto = texto[:pos] + inverso + texto[pos + 8:]
+        # REGRA FORTE: se QUALQUER nível for False, pular tudo
+        if stack and any(not nivel for nivel in stack):
+            i += 1
+            continue
 
-    # 6. Remover blocos falsos
-    texto = re.sub(r'{{false}}.*?({{true}}|{{endif}})', '', texto, flags=re.DOTALL)
+        resultado.append(texto[i])
+        i += 1
 
-    # 7. Limpeza final de todos os marcadores
-    texto = texto.replace("{{true}}", "").replace("{{false}}", "").replace("{{endif}}", "").replace("{{else}}", "")
+    texto_final = ''.join(resultado)
+    texto_final = re.sub(r'\s+', ' ', texto_final).strip()
 
-    # Limpeza de espaços
-    texto = re.sub(r'\s+', ' ', texto).strip()
-
-    return texto
-
+    return texto_final
 
 # ===================== FUNÇÃO DE EDIÇÃO DE PARÂMETROS =====================
 def editar_parametros(ent):
@@ -308,3 +328,97 @@ def pode_enviar(frequencia, ultimo_envio_str):
         except:
             return True
     return True
+
+# ===================== CONFIGURAÇÃO DE PARÂMETROS PARA NOVO TEMPLATE (VERSÃO FINAL) =====================
+def configurar_parametros_para_template(template_nome, parametros_antigos_str=""):
+    """Versão final: sempre pergunta todas as variáveis do novo template,
+    pré-preenche com valores antigos quando possível e força obrigatórias."""
+    if template_nome not in TEMPLATES:
+        print(f"❌ Template '{template_nome}' não encontrado.")
+        return ""
+
+    template_texto = TEMPLATES[template_nome]
+    info_vars = extrair_variaveis_e_opcionais(template_texto)
+
+    params_dict = parse_parametros(parametros_antigos_str) if parametros_antigos_str else {}
+
+    print(f"\n=== Configurando PARÂMETROS para o NOVO template '{template_nome}' ===")
+    print("Os valores antigos serão mostrados. Pressione Enter para manter ou digite novo valor.\n")
+
+    todas_vars = sorted(info_vars['todas'])
+
+    for var in todas_vars:
+        is_opcional = (var in info_vars['opcionais_raiz']) or \
+                      any(var in deps for deps in info_vars['condicionais'].values())
+
+        valor_antigo = params_dict.get(var, "")
+        status = "(opcional)" if is_opcional else "(OBRIGATÓRIO)"
+
+        if valor_antigo:
+            print(f"  {var} = {valor_antigo}  ← valor antigo")
+
+        novo_val = input(f"  {var} {status}: ").strip()
+
+        if novo_val == "":
+            if valor_antigo:
+                print(f"     → mantido valor antigo")
+                # continua com o valor antigo
+                pass
+            elif not is_opcional:
+                # obrigatório e sem valor antigo → força
+                while not novo_val:
+                    novo_val = input(f"  {var} (OBRIGATÓRIO - digite um valor): ").strip()
+                params_dict[var] = novo_val
+            else:
+                # opcional e sem valor → remove
+                params_dict.pop(var, None)
+                print(f"     → removido (não informado)")
+        else:
+            params_dict[var] = novo_val
+            print(f"     → atualizado")
+
+    # Variáveis condicionais dependentes
+    for var_cond, deps in info_vars['condicionais'].items():
+        if var_cond in params_dict and params_dict[var_cond]:
+            print(f"\n→ '{var_cond}' definido → verificando dependentes:")
+            for var_dep in sorted(set(deps)):
+                if var_dep in params_dict and params_dict.get(var_dep):
+                    continue
+                val = input(f"  {var_dep} (dependente): ").strip()
+                while not val:
+                    val = input(f"  {var_dep} (obrigatório): ").strip()
+                params_dict[var_dep] = val
+
+    parametros_str = ",".join(f"{k}={v}" for k, v in sorted(params_dict.items())) if params_dict else ""
+    print("✅ Parâmetros configurados com sucesso.\n")
+    return parametros_str
+
+
+if __name__ == "__main__":
+    entrada = """{{if:PAGO}}
+    Já está pago
+{{else}}
+    Valor do conserto:
+    {{if:PRECO_BRUTO}}
+        R$ {{PRECO_BRUTO}}, com descontos ficou
+    {{endif}}
+    {{if:!FALTA}}
+        *
+    {{endif}}
+    R$ {{PRECO}}
+    {{if:!FALTA}}
+        *
+    {{endif}}
+    {{if:FALTA}}
+        , falta *R$ {{FALTA}}*
+    {{endif}}
+{{endif}}"""
+
+    params = {
+        "PAGO": True,
+        "PRECO_BRUTO": True,
+        "PRECO": True,
+        "FALTA": False
+    }
+
+    print(processar_mensagem(entrada, params))
