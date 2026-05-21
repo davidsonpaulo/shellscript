@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta OS - Celsom Ferramentas</title>
+    
+    <!-- Favicon (mesmo do checaestoque) -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+    
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; margin: 0; padding: 0; }
+        .header {
+            background: #1e2937;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .header img { height: 60px; }
+        .container { max-width: 900px; margin: 30px auto; padding: 20px; }
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1em;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+        }
+        button {
+            padding: 12px 30px;
+            font-size: 1.1em;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        button:hover { background: #1d4ed8; }
+        .info-line { margin: 12px 0; font-size: 1.05em; }
+        .label { font-weight: 600; color: #475569; width: 140px; display: inline-block; }
+        .error { color: #ef4444; background: #fee2e2; padding: 15px; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <img src="/static/mascote.png" alt="Celsom Ferramentas">
+        <div>
+            <h1 style="margin:0;">CELSOM FERRAMENTAS</h1>
+            <p style="margin:0; opacity:0.9;">Consulta de Ordem de Serviço</p>
+        </div>
+    </header>
+
+    <div class="container">
+        {% if resultado %}
+            <div class="card">
+                <h2 style="margin-top:0;">OS {{ resultado.os }}</h2>
+                <div class="info-line"><span class="label">Cliente:</span> {{ resultado.cliente }}</div>
+
+                {% if resultado.cliente_obs %}
+                <div class="info-line">
+                    <span class="label">Observações cliente:</span>
+                    <br/>
+                    {{ resultado.cliente_obs | replace('\n', '<br>') | safe }}
+                </div>
+                {% endif %}
+
+                <div class="info-line"><span class="label">Telefone:</span> {{ resultado.telefone }}</div>
+                <div class="info-line"><span class="label">Equipamento:</span> {{ resultado.equipamento }}</div>
+                
+                {% if resultado.numero_serie %}
+                <div class="info-line"><span class="label">Nº Série:</span> {{ resultado.numero_serie }}</div>
+                {% endif %}
+
+                {% if resultado.objeto_obs %}
+                <div class="info-line">
+                    <span class="label">Observações:</span>
+                    {{ resultado.objeto_obs | replace('\n', '<br>') | safe }}
+                </div>
+                {% endif %}
+                
+                <div class="info-line"><span class="label">Situação:</span> <strong>{{ resultado.situacao }}</strong></div>
+                <div class="info-line"><span class="label">Abertura:</span> {{ resultado.abertura }}</div>
+                {% if resultado.fechamento %}
+                <div class="info-line"><span class="label">Fechamento:</span> {{ resultado.fechamento }}</div>
+                {% endif %}
+                
+                <hr style="margin: 20px 0;">
+                
+                {% if resultado.preco_bruto is not none %}
+                <div class="info-line"><span class="label">Preço Bruto:</span> R$ {{ resultado.preco_bruto or '0,00' }}</div>
+                {% endif %}
+                
+                <div class="info-line"><span class="label">Valor Líquido:</span> <strong>R$ {{ resultado.preco or '0,00' }}</strong></div>
+            </div>
+        {% elif error %}
+            <div class="card error">
+                <strong>Erro:</strong> {{ error }}
+            </div>
+        {% endif %}
+
+        <!-- Formulário de pesquisa -->
+        <div class="card">
+            <h3>Consultar Ordem de Serviço</h3>
+            <form method="GET" action="/">
+                <input type="text" 
+                       name="os" 
+                       placeholder="Digite o número da OS" 
+                       value="{{ request.args.get('os', '') }}"
+                       autofocus 
+                       onkeypress="if(event.key === 'Enter') this.form.submit()">
+                <br><br>
+                <button type="submit">🔍 Pesquisar</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,6 @@
+.due-today { background-color: #fefce8; border-left: 4px solid #eab308; }
+.future { opacity: 0.85; background-color: #f3f4f6; }
+.action-buttons { display: flex; gap: 8px; justify-content: center; flex-wrap: nowrap; }
+.modal { animation: modalPop 0.3s ease-out; }
+
+@keyframes modalPop { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
