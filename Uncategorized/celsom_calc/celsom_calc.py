@@ -3,6 +3,13 @@
 from decimal import Decimal, getcontext, ROUND_HALF_UP, ROUND_FLOOR, ROUND_CEILING
 import sys
 import json
+import os
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+FILES = {
+        'vars' : os.path.join(SCRIPT_DIR, "vars.txt"),
+        'taxas' : os.path.join(SCRIPT_DIR, "taxas.json")
+        }
 
 # Configuração global – suficiente para finanças
 getcontext().prec = 28
@@ -420,14 +427,14 @@ def processar_comando(argumentos, tipo_anterior=None):
 
 
 if __name__ == "__main__":
-    constantes = carregar_constantes('vars.txt')
+    constantes = carregar_constantes(FILES['vars'])
     A = constantes.get("A", zero)
     B = constantes.get("B", zero)
     C = constantes.get("C", zero)
     CARGA_OPERACIONAL = constantes.get("CARGA_OPERACIONAL", zero)
     COMISSAO_MAO_DE_OBRA = constantes.get("COMISSAO_MAO_DE_OBRA", zero)  # não usada no código atual
 
-    TAXAS = carregar_taxas("taxas.json")
+    TAXAS = carregar_taxas(FILES['taxas'])
 
     tipos_validos = {'peca', 'maquina', 'acessorio', 'disco', 'dewalt', 'vonder', 'parcelamento', 'os', 'sair', 'exit', 'ajuda', 'help'}
     tipo = None
